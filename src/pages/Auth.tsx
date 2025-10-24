@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -16,7 +22,7 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!token.trim()) {
       toast({
         title: "Token required",
@@ -27,10 +33,10 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    
+
     // Validate token with Todoist API
     const isValid = await validateToken(token);
-    
+
     if (!isValid) {
       setIsLoading(false);
       toast({
@@ -40,10 +46,10 @@ export default function Auth() {
       });
       return;
     }
-    
+
     // Store token
     localStorage.setItem("todoist_token", token);
-    
+
     setIsLoading(false);
     toast({
       title: "Success!",
@@ -61,7 +67,9 @@ export default function Auth() {
               <CheckCircle2 className="w-10 h-10 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold">Welcome to DoneGlow</CardTitle>
+          <CardTitle className="text-3xl font-bold">
+            Welcome to DoneGlow
+          </CardTitle>
           <CardDescription className="text-base">
             Visualize your Todoist achievements beautifully
           </CardDescription>
@@ -77,8 +85,13 @@ export default function Auth() {
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 disabled={isLoading}
+                autoComplete="new-password"
+                aria-describedby="token-description"
               />
-              <p className="text-sm text-muted-foreground">
+              <p
+                id="token-description"
+                className="text-sm text-muted-foreground"
+              >
                 Get your token from{" "}
                 <a
                   href="https://todoist.com/app/settings/integrations/developer"

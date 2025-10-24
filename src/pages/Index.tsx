@@ -22,7 +22,7 @@ import {
   calculateHourStats,
   calculateRecapStats,
 } from "@/lib/todoist";
-import { subDays } from "date-fns";
+import { subDays, startOfDay, isAfter, isBefore } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 
@@ -61,7 +61,7 @@ export default function Index() {
 
       try {
         const [fetchedTasks, fetchedProjects] = await Promise.all([
-          fetchCompletedTasks(token),
+          fetchCompletedTasks(token, subDays(new Date(), 90).toISOString()),
           fetchProjects(token),
         ]);
         setTasks(fetchedTasks);
@@ -89,16 +89,55 @@ export default function Index() {
 
   // Process data
   const processedTasks = useMemo(() => processTasks(tasks), [tasks]);
+
+  // Filter tasks by date range
+  const filteredTasks = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return processedTasks;
+    const filtered = processedTasks.filter((task) => {
+      const taskDate = startOfDay(task.completedDate);
+      return (
+        (isAfter(taskDate, dateRange.from!) ||
+          taskDate.getTime() === dateRange.from!.getTime()) &&
+        (isBefore(taskDate, dateRange.to!) ||
+          taskDate.getTime() === dateRange.to!.getTime())
+      );
+    });
+
+    // Debug logging for development
+    if (import.meta.env.DEV) {
+      console.log(
+        `📊 Tasks: ${processedTasks.length} total, ${
+          filtered.length
+        } filtered for ${dateRange?.from?.toISOString().split("T")[0]} to ${
+          dateRange?.to?.toISOString().split("T")[0]
+        }`
+      );
+    }
+
+    return filtered;
+  }, [processedTasks, dateRange]);
+
   const dayStats = useMemo(
-    () => calculateDayStats(processedTasks, dateRange?.from || subDays(new Date(), 30), dateRange?.to || new Date()),
-    [processedTasks, dateRange]
+    () =>
+      calculateDayStats(
+        filteredTasks,
+        dateRange?.from || subDays(new Date(), 30),
+        dateRange?.to || new Date()
+      ),
+    [filteredTasks, dateRange]
   );
   const projectStats = useMemo(
-    () => calculateProjectStats(processedTasks, projects),
-    [processedTasks, projects]
+    () => calculateProjectStats(filteredTasks, projects),
+    [filteredTasks, projects]
   );
-  const hourStats = useMemo(() => calculateHourStats(processedTasks), [processedTasks]);
-  const recapStats = useMemo(() => calculateRecapStats(dayStats, projectStats), [dayStats, projectStats]);
+  const hourStats = useMemo(
+    () => calculateHourStats(filteredTasks),
+    [filteredTasks]
+  );
+  const recapStats = useMemo(
+    () => calculateRecapStats(dayStats, projectStats),
+    [dayStats, projectStats]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,13 +150,23 @@ export default function Index() {
                 <CheckCircle2 className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">DoneGlow</h1>
-                <p className="text-xs text-muted-foreground">Task completion insights</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+                  DoneGlow
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  Task completion insights
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout" className="hover:bg-destructive/10 hover:text-destructive transition-colors">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </div>
@@ -144,7 +193,8 @@ export default function Index() {
           <div className="space-y-4">
             <Alert>
               <AlertDescription>
-                No completed tasks found. Complete some tasks in Todoist to see your data visualized here!
+                No completed tasks found. Complete some tasks in Todoist to see
+                your data visualized here!
               </AlertDescription>
             </Alert>
             <Button onClick={() => setUseSampleData(true)} variant="outline">
@@ -162,7 +212,10 @@ export default function Index() {
             {/* Charts Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="lg:col-span-2">
-                <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+                <CompletionHeatmap
+                  data={dayStats}
+                  onDayClick={handleDayClick}
+                />
               </div>
               <WeeklyFocusStacks data={dayStats} projects={projectStats} />
               <ProjectShareDonut data={projectStats} />
@@ -175,7 +228,11 @@ export default function Index() {
       </main>
 
       {/* Task Drilldown Dialog */}
-      <TaskDrilldown day={selectedDay} open={drilldownOpen} onOpenChange={setDrilldownOpen} />
+      <TaskDrilldown
+        day={selectedDay}
+        open={drilldownOpen}
+        onOpenChange={setDrilldownOpen}
+      />
     </div>
   );
 }

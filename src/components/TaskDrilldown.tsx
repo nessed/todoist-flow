@@ -3,6 +3,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { DayStats } from "@/types/todoist";
 import { format, parseISO } from "date-fns";
@@ -25,6 +26,10 @@ export function TaskDrilldown({ day, open, onOpenChange }: TaskDrilldownProps) {
           <DialogTitle>
             Tasks completed on {format(parseISO(day.date), "MMMM d, yyyy")}
           </DialogTitle>
+          <DialogDescription>
+            View all {day.tasks.length} tasks completed on this day, including
+            completion times and labels.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-4">
           {day.tasks.length === 0 ? (
@@ -50,7 +55,11 @@ export function TaskDrilldown({ day, open, onOpenChange }: TaskDrilldownProps) {
                   {task.labels.length > 0 && (
                     <div className="flex gap-1 flex-wrap">
                       {task.labels.map((label) => (
-                        <Badge key={label} variant="secondary" className="text-xs">
+                        <Badge
+                          key={label}
+                          variant="secondary"
+                          className="text-xs"
+                        >
                           {label}
                         </Badge>
                       ))}

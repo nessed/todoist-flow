@@ -16,10 +16,8 @@ export async function validateToken(token: string): Promise<boolean> {
 }
 
 export async function fetchCompletedTasks(token: string, since?: string): Promise<TodoistTask[]> {
+  // Use the Sync API without since parameter to get all available data
   const url = new URL(`${TODOIST_SYNC_API}/completed/get_all`);
-  if (since) {
-    url.searchParams.append("since", since);
-  }
   
   const headers = { Authorization: `Bearer ${token}` };
   
