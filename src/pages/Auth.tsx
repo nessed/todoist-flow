@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2 } from "lucide-react";
+import { validateToken } from "@/lib/todoist";
 
 export default function Auth() {
   const [token, setToken] = useState("");
@@ -27,18 +28,28 @@ export default function Auth() {
 
     setIsLoading(true);
     
+    // Validate token with Todoist API
+    const isValid = await validateToken(token);
+    
+    if (!isValid) {
+      setIsLoading(false);
+      toast({
+        title: "Invalid token",
+        description: "Invalid Todoist token or unable to fetch data.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Store token
     localStorage.setItem("todoist_token", token);
     
-    // Simulate API validation
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "Success!",
-        description: "Connected to Todoist",
-      });
-      navigate("/");
-    }, 1000);
+    setIsLoading(false);
+    toast({
+      title: "Success!",
+      description: "Connected to Todoist",
+    });
+    navigate("/");
   };
 
   return (

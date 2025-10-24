@@ -2,9 +2,25 @@ import { TodoistTask, TodoistProject, ProcessedTask, DayStats, ProjectStats, Hou
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
+const TODOIST_SYNC_API = "https://api.todoist.com/sync/v9";
+
+export async function validateToken(token: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${TODOIST_API_BASE}/projects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 export async function fetchCompletedTasks(token: string, since?: string): Promise<TodoistTask[]> {
-  const url = new URL(`${TODOIST_API_BASE}/tasks`);
+  const url = new URL(`${TODOIST_SYNC_API}/completed/get_all`);
+  if (since) {
+    url.searchParams.append("since", since);
+  }
+  
   const headers = { Authorization: `Bearer ${token}` };
   
   const response = await fetch(url.toString(), { headers });
@@ -13,10 +29,16 @@ export async function fetchCompletedTasks(token: string, since?: string): Promis
     throw new Error(`Failed to fetch tasks: ${response.statusText}`);
   }
   
-  // Note: Todoist REST API v2 doesn't have a direct "completed tasks" endpoint
-  // You'd need to use the Sync API or keep track of completed tasks
-  // For MVP, we'll use mock data structure
-  return [];
+  const data = await response.json();
+  
+  // Transform Sync API response to our format
+  return (data.items || []).map((item: any) => ({
+    id: item.id,
+    content: item.content,
+    completed_at: item.completed_at,
+    project_id: item.project_id,
+    labels: item.labels || [],
+  }));
 }
 
 export async function fetchProjects(token: string): Promise<TodoistProject[]> {
