@@ -15,9 +15,14 @@ export function ProjectShareDonut({ data }: ProjectShareDonutProps) {
   const colors = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
   return (
-    <Card>
+    <Card className="animate-scale-in">
       <CardHeader>
-        <CardTitle>Project Share Donut</CardTitle>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-chart-3/20 to-chart-3/10 flex items-center justify-center">
+            <div className="h-2 w-2 rounded-full bg-chart-3" />
+          </div>
+          <CardTitle className="text-xl">Project Share Donut</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>

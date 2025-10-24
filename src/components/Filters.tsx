@@ -26,7 +26,7 @@ export function Filters({ dateRange, onDateRangeChange }: FiltersProps) {
   };
 
   return (
-    <Card>
+    <Card className="animate-fade-in border-none bg-gradient-to-br from-card to-muted/30">
       <CardContent className="pt-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-2">

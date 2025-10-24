@@ -36,9 +36,14 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
   const colors = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
   return (
-    <Card>
+    <Card className="animate-scale-in">
       <CardHeader>
-        <CardTitle>Weekly Focus Stacks</CardTitle>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-chart-2/20 to-chart-2/10 flex items-center justify-center">
+            <div className="h-2 w-2 rounded-full bg-chart-2" />
+          </div>
+          <CardTitle className="text-xl">Weekly Focus Stacks</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>

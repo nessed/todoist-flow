@@ -13,9 +13,14 @@ export function TimeOfDayRhythm({ data }: TimeOfDayRhythmProps) {
   }));
 
   return (
-    <Card>
+    <Card className="animate-scale-in">
       <CardHeader>
-        <CardTitle>Time-of-Day Rhythm</CardTitle>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-chart-4/20 to-chart-4/10 flex items-center justify-center">
+            <div className="h-2 w-2 rounded-full bg-chart-4" />
+          </div>
+          <CardTitle className="text-xl">Time-of-Day Rhythm</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>

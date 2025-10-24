@@ -38,19 +38,22 @@ export function RecapCards({ stats }: RecapCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
       {cards.map((card) => (
-        <Card key={card.title} className="transition-all hover:shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <Card key={card.title} className="relative overflow-hidden group animate-fade-in border-none bg-gradient-to-br from-card to-card/50 backdrop-blur-sm">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <CardHeader className="flex flex-row items-center justify-between pb-3 space-y-0 relative">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.title}
             </CardTitle>
-            <card.icon className={`h-4 w-4 ${card.color}`} />
+            <div className={`h-10 w-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+              <card.icon className={`h-5 w-5 ${card.color}`} />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{card.value}</div>
+          <CardContent className="relative">
+            <div className="text-3xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">{card.value}</div>
             {card.subtitle && (
-              <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
+              <p className="text-sm text-muted-foreground mt-2 font-medium">{card.subtitle}</p>
             )}
           </CardContent>
         </Card>

@@ -103,18 +103,21 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
+      <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-xl shadow-sm">
+        <div className="container mx-auto px-4 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+              <div className="w-11 h-11 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
                 <CheckCircle2 className="w-6 h-6 text-primary-foreground" />
               </div>
-              <h1 className="text-2xl font-bold">DoneGlow</h1>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">DoneGlow</h1>
+                <p className="text-xs text-muted-foreground">Task completion insights</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout">
+              <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Logout" className="hover:bg-destructive/10 hover:text-destructive transition-colors">
                 <LogOut className="h-5 w-5" />
               </Button>
             </div>
@@ -123,7 +126,7 @@ export default function Index() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 space-y-8">
+      <main className="container mx-auto px-4 py-10 space-y-10">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />

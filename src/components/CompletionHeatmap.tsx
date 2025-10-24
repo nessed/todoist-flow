@@ -18,9 +18,14 @@ export function CompletionHeatmap({ data, onDayClick }: CompletionHeatmapProps) 
   };
 
   return (
-    <Card>
+    <Card className="animate-scale-in">
       <CardHeader>
-        <CardTitle>Completion Heatmap</CardTitle>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-chart-1/20 to-chart-1/10 flex items-center justify-center">
+            <div className="h-2 w-2 rounded-full bg-chart-1" />
+          </div>
+          <CardTitle className="text-xl">Completion Heatmap</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-7 gap-2">
@@ -30,7 +35,7 @@ export function CompletionHeatmap({ data, onDayClick }: CompletionHeatmapProps) 
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => onDayClick(day)}
-                    className={`aspect-square rounded-md transition-all hover:scale-110 hover:ring-2 hover:ring-primary ${getIntensity(day.count)}`}
+                    className={`aspect-square rounded-lg transition-all hover:scale-110 hover:ring-2 hover:ring-primary hover:shadow-lg ${getIntensity(day.count)}`}
                     aria-label={`${format(parseISO(day.date), "MMM d")}: ${day.count} tasks`}
                   />
                 </TooltipTrigger>

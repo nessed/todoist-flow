@@ -35,7 +35,7 @@ export function TaskDrilldown({ day, open, onOpenChange }: TaskDrilldownProps) {
             day.tasks.map((task) => (
               <div
                 key={task.id}
-                className="p-4 rounded-lg border bg-card hover:bg-accent/10 transition-colors"
+                className="p-4 rounded-xl border bg-gradient-to-br from-card to-muted/20 hover:shadow-lg hover:scale-[1.01] transition-all duration-200"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
