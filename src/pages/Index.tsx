@@ -21,7 +21,12 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
-import { DayStats, TodoistTask, TodoistProject } from "@/types/todoist";
+import {
+  DayStats,
+  TodoistTask,
+  TodoistProject,
+  TodoistUserProfile,
+} from "@/types/todoist";
 import { generateMockTasks, generateMockProjects } from "@/lib/mockData";
 import {
   fetchCompletedTasks,
@@ -31,6 +36,7 @@ import {
   calculateProjectStats,
   calculateHourStats,
   calculateRecapStats,
+  fetchUserProfile,
 } from "@/lib/todoist";
 import { subDays, startOfDay, isAfter, isBefore, format, setHours } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -45,6 +51,7 @@ export default function Index() {
   });
   const [tasks, setTasks] = useState<TodoistTask[]>([]);
   const [projects, setProjects] = useState<TodoistProject[]>([]);
+  const [userProfile, setUserProfile] = useState<TodoistUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
@@ -54,6 +61,7 @@ export default function Index() {
     const token = localStorage.getItem("todoist_token");
     if (!token && !useSampleData) { // Adjusted condition
       console.log("[Index.tsx] No token found, navigating to /auth");
+      setUserProfile(null);
       navigate("/auth");
       return;
     }
@@ -67,11 +75,23 @@ export default function Index() {
         console.log("[Index.tsx] Using sample data.");
         try {
             await new Promise(resolve => setTimeout(resolve, 100));
+            setUserProfile({
+              id: "sample",
+              full_name: "DoneGlow Explorer",
+              email: "explorer@doneglow.app",
+              avatar_url: null,
+              image_id: null,
+              timezone:
+                typeof Intl !== "undefined"
+                  ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                  : null,
+            });
             setTasks(generateMockTasks(90));
             setProjects(generateMockProjects());
         } catch (sampleErr) {
              console.error("[Index.tsx] Error generating sample data:", sampleErr);
              setError("Failed to load sample data.");
+             setUserProfile(null);
         } finally {
              setIsLoading(false);
         }
@@ -83,24 +103,34 @@ export default function Index() {
           let fetchedTasks: TodoistTask[] = [];
           let fetchedProjects: TodoistProject[] = [];
           let fetchError: Error | null = null;
+          let fetchedUser: TodoistUserProfile | null = null;
 
           try {
             console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
             // Pass `since` to cut payloads when we have a date range
             const since = dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined;
-            [fetchedTasks, fetchedProjects] = await Promise.all([
+            const [tasksData, projectsData] = await Promise.all([
               fetchCompletedTasks(token, since),
               fetchProjects(token),
             ]);
+            fetchedTasks = tasksData;
+            fetchedProjects = projectsData;
+            try {
+              fetchedUser = await fetchUserProfile(token);
+            } catch (profileErr) {
+              console.warn("[Index.tsx] Unable to fetch Todoist user profile.", profileErr);
+            }
             console.log(`[Index.tsx] Successfully fetched ${fetchedTasks.length} tasks and ${fetchedProjects.length} projects.`);
             setTasks(fetchedTasks);
             setProjects(fetchedProjects);
+            setUserProfile(fetchedUser);
           } catch (err) {
             console.error("[Index.tsx] Error during Promise.all fetchData:", err);
             fetchError = err instanceof Error ? err : new Error('Unknown error during fetch');
             setError(`Failed to fetch data: ${fetchError.message}. Please check your connection or API token.`);
             setTasks([]);
             setProjects([]);
+            setUserProfile(null);
              // If fetch fails due to auth, clear token and redirect
              if ((err as any)?.message?.includes('Authentication failed')) {
                 localStorage.removeItem("todoist_token");
@@ -130,6 +160,7 @@ export default function Index() {
     localStorage.removeItem("todoist_token");
     setTasks([]); // Clear data on logout
     setProjects([]);
+    setUserProfile(null);
     navigate("/auth");
   };
 
@@ -622,6 +653,38 @@ export default function Index() {
                 </span>
               </div>
             </div>
+            {userProfile && (
+              <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-background/80 px-3 py-1.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)] md:flex">
+                <Avatar className="h-8 w-8 border border-white/10">
+                  {resolvedAvatarUrl ? (
+                    <AvatarImage src={resolvedAvatarUrl} alt={userProfile.full_name} />
+                  ) : null}
+                  <AvatarFallback className="text-xs font-semibold text-foreground">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="leading-tight">
+                  <p className="text-sm font-medium text-foreground">
+                    {userProfile.full_name}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {useSampleData ? "Sample profile" : "Todoist account"}
+                  </p>
+                </div>
+              </div>
+            )}
+            <ThemeToggle />
+            {(!useSampleData && hasStoredToken) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-background/80 px-3 py-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] md:flex">

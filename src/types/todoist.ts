@@ -41,3 +41,12 @@ export interface RecapStats {
   bestDay: { date: string; count: number };
   topProject: { name: string; count: number };
 }
+
+export interface TodoistUserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url?: string | null;
+  image_id?: string | null;
+  timezone?: string | null;
+}

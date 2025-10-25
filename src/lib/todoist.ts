@@ -1,4 +1,13 @@
-import { TodoistTask, TodoistProject, ProcessedTask, DayStats, ProjectStats, HourStats, RecapStats } from "@/types/todoist";
+import {
+  TodoistTask,
+  TodoistProject,
+  ProcessedTask,
+  DayStats,
+  ProjectStats,
+  HourStats,
+  RecapStats,
+  TodoistUserProfile,
+} from "@/types/todoist";
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
@@ -155,6 +164,47 @@ export async function fetchProjects(token: string): Promise<TodoistProject[]> {
       name: p.name || `Project ${p.id}`,
       color: p.color || "#808080",
   }));
+}
+
+
+export async function fetchUserProfile(token: string): Promise<TodoistUserProfile> {
+  const url = `${TODOIST_API_BASE}/user`;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const response = await fetchWithRetry(url, { headers });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch user profile: ${response.statusText} (${response.status}) - ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  const rawImageId = data.image_id ?? null;
+  let avatarUrl: string | null = null;
+
+  if (typeof data.avatar_url === "string" && data.avatar_url.length > 0) {
+    avatarUrl = data.avatar_url;
+  } else if (typeof data.avatar_big === "string" && data.avatar_big.length > 0) {
+    avatarUrl = data.avatar_big;
+  } else if (typeof data.avatar_medium === "string" && data.avatar_medium.length > 0) {
+    avatarUrl = data.avatar_medium;
+  } else if (rawImageId) {
+    avatarUrl = `https://dcff1xvirvpb3.cloudfront.net/${rawImageId}.jpg`;
+  }
+
+  return {
+    id: data.id?.toString?.() ?? "user",
+    full_name: data.full_name ?? data.name ?? "Todoist user",
+    email: data.email ?? "",
+    avatar_url: avatarUrl,
+    image_id: rawImageId ? rawImageId.toString() : null,
+    timezone: data.timezone ?? null,
+  };
 }
 
 
