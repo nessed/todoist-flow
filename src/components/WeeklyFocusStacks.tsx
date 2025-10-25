@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DayStats, ProjectStats } from "@/types/todoist";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -26,49 +27,58 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  const projectColorMap = new Map<string, string>();
-  projects.forEach((project, index) => {
-    projectColorMap.set(
-      project.projectName,
-      project.projectId === "other-projects"
-        ? OTHER_COLOR
-        : BASE_COLORS[index % BASE_COLORS.length]
-    );
-  });
-
-  const chartData = weekDays.map((day) => {
-    const dateKey = format(day, "yyyy-MM-dd");
-    const dayData = data.find((d) => d.date === dateKey);
-
-    const daySummary: { [key: string]: any } = {
-      day: format(day, "EEE"),
-      fullDate: dateKey,
-      total: dayData?.count || 0,
-    };
-
-    projects.forEach(p => {
-        daySummary[p.projectName] = 0;
+  const projectColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach((project, index) => {
+      map.set(
+        project.projectName,
+        project.projectId === "other-projects"
+          ? OTHER_COLOR
+          : BASE_COLORS[index % BASE_COLORS.length]
+      );
     });
+    return map;
+  }, [projects]);
 
-    if (dayData) {
-        dayData.tasks.forEach(task => {
-            const projectStat = projects.find(p => p.projectId === task.project_id)
-                             || projects.find(p => p.projectId === `unknown-${task.project_id}`)
-                             || projects.find(p => p.projectId === 'no-project' && !task.project_id)
-                             || projects.find(p => p.projectId === 'other-projects');
+  const chartData = useMemo(() => {
+    return weekDays.map((day) => {
+      const dateKey = format(day, "yyyy-MM-dd");
+      const dayData = data.find((d) => d.date === dateKey);
 
-            if (projectStat) {
-                daySummary[projectStat.projectName] = (daySummary[projectStat.projectName] || 0) + 1;
-            } else {
-                 console.warn(`Task ${task.id} on ${dateKey} could not be mapped to a project stat.`);
-                 if (daySummary["Other"] !== undefined) {
-                      daySummary["Other"] = (daySummary["Other"] || 0) + 1;
-                 }
+      const daySummary: { [key: string]: any } = {
+        day: format(day, "EEE"),
+        fullDate: dateKey,
+        total: dayData?.count || 0,
+      };
+
+      projects.forEach((p) => {
+        daySummary[p.projectName] = 0;
+      });
+
+      if (dayData) {
+        dayData.tasks.forEach((task) => {
+          const projectStat =
+            projects.find((p) => p.projectId === task.project_id) ||
+            projects.find((p) => p.projectId === `unknown-${task.project_id}`) ||
+            projects.find((p) => p.projectId === 'no-project' && !task.project_id) ||
+            projects.find((p) => p.projectId === 'other-projects');
+
+          if (projectStat) {
+            daySummary[projectStat.projectName] =
+              (daySummary[projectStat.projectName] || 0) + 1;
+          } else {
+            console.warn(
+              `Task ${task.id} on ${dateKey} could not be mapped to a project stat.`
+            );
+            if (daySummary['Other'] !== undefined) {
+              daySummary['Other'] = (daySummary['Other'] || 0) + 1;
             }
+          }
         });
-    }
-    return daySummary;
-  });
+      }
+      return daySummary;
+    });
+  }, [weekDays, data, projects]);
 
 
   return (

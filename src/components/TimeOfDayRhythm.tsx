@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HourStats } from "@/types/todoist";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -7,10 +8,14 @@ interface TimeOfDayRhythmProps {
 }
 
 export function TimeOfDayRhythm({ data }: TimeOfDayRhythmProps) {
-  const chartData = data.map((hour) => ({
-    hour: `${hour.hour.toString().padStart(2, "0")}:00`,
-    count: hour.count,
-  }));
+  const chartData = useMemo(
+    () =>
+      data.map((hour) => ({
+        hour: `${hour.hour.toString().padStart(2, "0")}:00`,
+        count: hour.count,
+      })),
+    [data]
+  );
 
   return (
     <Card className="animate-scale-in">

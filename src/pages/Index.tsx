@@ -39,6 +39,7 @@ export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0); // trigger refetch without full reload
 
   useEffect(() => {
     const token = localStorage.getItem("todoist_token");
@@ -76,8 +77,10 @@ export default function Index() {
 
           try {
             console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
+            // Pass `since` to cut payloads when we have a date range
+            const since = dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined;
             [fetchedTasks, fetchedProjects] = await Promise.all([
-              fetchCompletedTasks(token),
+              fetchCompletedTasks(token, since),
               fetchProjects(token),
             ]);
             console.log(`[Index.tsx] Successfully fetched ${fetchedTasks.length} tasks and ${fetchedProjects.length} projects.`);
@@ -112,7 +115,7 @@ export default function Index() {
         console.log("[Index.tsx] Cleanup useEffect");
     };
 
-  }, [navigate, useSampleData]); // Removed token from dependencies, rely on check inside
+  }, [navigate, useSampleData, refreshTick]); // trigger re-fetch via refreshTick
 
   const handleLogout = () => {
     localStorage.removeItem("todoist_token");
@@ -164,18 +167,15 @@ export default function Index() {
   );
 
    const triggerFetchData = () => {
-       setUseSampleData(false); // Ensure we fetch real data
-       // Re-trigger useEffect by slightly changing a dependency isn't ideal,
-       // a dedicated refetch function from react-query would be better,
-       // but for this structure, reloading is simplest.
-       window.location.reload();
+       setUseSampleData(false);
+       setRefreshTick((n) => n + 1);
    };
 
   // --- Helper to render main content ---
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <span className="ml-3 text-lg">Loading your achievements...</span>
         </div>
@@ -184,7 +184,7 @@ export default function Index() {
 
     if (error) {
       return (
-        <div className="space-y-6 max-w-xl mx-auto text-center py-10">
+        <div className="space-y-6 max-w-xl mx-auto text-center py-10" aria-live="polite">
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>

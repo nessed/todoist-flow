@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectStats } from "@/types/todoist";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
@@ -16,15 +17,23 @@ const BASE_COLORS = [
 const OTHER_COLOR = "hsl(var(--muted-foreground) / 0.5)";
 
 export function ProjectShareDonut({ data }: ProjectShareDonutProps) {
-  const chartData = data.map((project, index) => ({
-    name: project.projectName,
-    value: project.count,
-    fill: project.projectId === "other-projects"
-           ? OTHER_COLOR
-           : BASE_COLORS[index % BASE_COLORS.length],
-  }));
+  const chartData = useMemo(
+    () =>
+      data.map((project, index) => ({
+        name: project.projectName,
+        value: project.count,
+        fill:
+          project.projectId === "other-projects"
+            ? OTHER_COLOR
+            : BASE_COLORS[index % BASE_COLORS.length],
+      })),
+    [data]
+  );
 
-  const totalTasks = chartData.reduce((sum, item) => sum + item.value, 0);
+  const totalTasks = useMemo(
+    () => chartData.reduce((sum, item) => sum + item.value, 0),
+    [chartData]
+  );
 
   return (
     <Card className="animate-scale-in">

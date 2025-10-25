@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"; // Import useState
+import { useState, useMemo, useEffect } from "react"; // Import useState
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DayStats } from "@/types/todoist";
 import {
@@ -58,11 +58,20 @@ export function CompletionHeatmap({
   // --- State to manage open/closed state of collapsibles (optional, default open) ---
   // If you want them to start closed, initialize useState({})
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>(() => {
-    // Default all months to open
-    const initialOpenState: Record<string, boolean> = {};
-    // You might need to derive month keys from data if you want complex initial state
-    return initialOpenState;
+    try {
+      const raw = localStorage.getItem('heatmap_open_months');
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    } catch (_) {
+      return {};
+    }
   });
+  useEffect(() => {
+    try {
+      localStorage.setItem('heatmap_open_months', JSON.stringify(openMonths));
+    } catch (_) {
+      // ignore persistence errors
+    }
+  }, [openMonths]);
   // --- End State ---
 
   const monthlyData = useMemo(() => {
@@ -178,7 +187,13 @@ export function CompletionHeatmap({
 
           {monthlyData.map(({ monthKey, monthName, days }) => (
             // --- Wrap month in Collapsible ---
-            <Collapsible key={monthKey} defaultOpen={true} /* Start open */>
+            <Collapsible
+              key={monthKey}
+              defaultOpen={openMonths[monthKey] ?? true}
+              onOpenChange={(open) =>
+                setOpenMonths((prev) => ({ ...prev, [monthKey]: open }))
+              }
+            >
               <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-semibold mb-1 w-full group">
                 {monthName}
                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
