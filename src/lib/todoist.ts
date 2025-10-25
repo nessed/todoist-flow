@@ -7,6 +7,7 @@ import {
   HourStats,
   RecapStats,
   TodoistUserProfile,
+  TodoistActiveTask,
 } from "@/types/todoist";
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
@@ -163,6 +164,51 @@ export async function fetchProjects(token: string): Promise<TodoistProject[]> {
       id: p.id.toString(),
       name: p.name || `Project ${p.id}`,
       color: p.color || "#808080",
+  }));
+}
+
+
+export async function fetchUpcomingTasks(
+  token: string,
+  filter: string = "(overdue | today | due before: +7 days) & !@done"
+): Promise<TodoistActiveTask[]> {
+  const params = new URLSearchParams({ filter });
+  const url = `${TODOIST_API_BASE}/tasks?${params.toString()}`;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const response = await fetchWithRetry(url, { headers });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch upcoming tasks: ${response.statusText} (${response.status}) - ${errorText}`);
+  }
+
+  const tasks = await response.json();
+
+  if (!Array.isArray(tasks)) {
+    console.warn("[fetchUpcomingTasks] Unexpected response shape", tasks);
+    return [];
+  }
+
+  return tasks.map((task: any) => ({
+    id: task.id?.toString?.() ?? "",
+    content: task.content ?? "",
+    project_id: task.project_id?.toString?.() ?? "",
+    labels: Array.isArray(task.labels) ? task.labels : [],
+    priority: typeof task.priority === "number" ? task.priority : 1,
+    due: task.due
+      ? {
+          date: task.due.date ?? null,
+          datetime: task.due.datetime ?? null,
+          timezone: task.due.timezone ?? null,
+        }
+      : null,
+    section_id: task.section_id?.toString?.() ?? null,
+    url: task.url ?? undefined,
   }));
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RecapCards } from "@/components/RecapCards";
@@ -27,6 +27,7 @@ import {
   TodoistTask,
   TodoistProject,
   TodoistUserProfile,
+  TodoistActiveTask,
 } from "@/types/todoist";
 import { generateMockTasks, generateMockProjects } from "@/lib/mockData";
 import {
@@ -38,8 +39,19 @@ import {
   calculateHourStats,
   calculateRecapStats,
   fetchUserProfile,
+  fetchUpcomingTasks,
 } from "@/lib/todoist";
-import { subDays, startOfDay, isAfter, isBefore, format, setHours } from "date-fns";
+import {
+  subDays,
+  startOfDay,
+  isAfter,
+  isBefore,
+  format,
+  setHours,
+  parseISO,
+  differenceInCalendarDays,
+  addDays,
+} from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Index() {
@@ -53,6 +65,7 @@ export default function Index() {
   const [tasks, setTasks] = useState<TodoistTask[]>([]);
   const [projects, setProjects] = useState<TodoistProject[]>([]);
   const [userProfile, setUserProfile] = useState<TodoistUserProfile | null>(null);
+  const [upcomingTasks, setUpcomingTasks] = useState<TodoistActiveTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
@@ -89,10 +102,66 @@ export default function Index() {
             });
             setTasks(generateMockTasks(90));
             setProjects(generateMockProjects());
+            const today = new Date();
+            setUpcomingTasks([
+              {
+                id: "sample-upcoming-1",
+                content: "Nudge quarterly strategy memo",
+                project_id: "proj1",
+                labels: ["strategy"],
+                priority: 4,
+                due: {
+                  date: format(addDays(today, -1), "yyyy-MM-dd"),
+                  datetime: null,
+                  timezone: null,
+                },
+                url: "#",
+                section_id: null,
+              },
+              {
+                id: "sample-upcoming-2",
+                content: "Ship DoneGlow release notes",
+                project_id: "proj1",
+                labels: ["ship"],
+                priority: 3,
+                due: {
+                  date: format(today, "yyyy-MM-dd"),
+                  datetime: null,
+                  timezone: null,
+                },
+                url: "#",
+                section_id: null,
+              },
+              {
+                id: "sample-upcoming-3",
+                content: "Plan weekend hike",
+                project_id: "proj4",
+                labels: ["health"],
+                priority: 2,
+                due: {
+                  date: format(addDays(today, 2), "yyyy-MM-dd"),
+                  datetime: null,
+                  timezone: null,
+                },
+                url: "#",
+                section_id: null,
+              },
+              {
+                id: "sample-upcoming-4",
+                content: "Clear reading backlog",
+                project_id: "proj3",
+                labels: ["learning"],
+                priority: 1,
+                due: null,
+                url: "#",
+                section_id: null,
+              },
+            ]);
         } catch (sampleErr) {
              console.error("[Index.tsx] Error generating sample data:", sampleErr);
              setError("Failed to load sample data.");
              setUserProfile(null);
+             setUpcomingTasks([]);
         } finally {
              setIsLoading(false);
         }
@@ -110,12 +179,18 @@ export default function Index() {
             console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
             // Pass `since` to cut payloads when we have a date range
             const since = dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined;
-            const [tasksData, projectsData] = await Promise.all([
+            const upcomingPromise = fetchUpcomingTasks(token).catch((err) => {
+              console.warn("[Index.tsx] Unable to fetch upcoming tasks.", err);
+              return [] as TodoistActiveTask[];
+            });
+            const [tasksData, projectsData, upcomingData] = await Promise.all([
               fetchCompletedTasks(token, since),
               fetchProjects(token),
+              upcomingPromise,
             ]);
             fetchedTasks = tasksData;
             fetchedProjects = projectsData;
+            setUpcomingTasks(upcomingData);
             try {
               fetchedUser = await fetchUserProfile(token);
             } catch (profileErr) {
@@ -125,6 +200,9 @@ export default function Index() {
             setTasks(fetchedTasks);
             setProjects(fetchedProjects);
             setUserProfile(fetchedUser);
+            if (!upcomingData || upcomingData.length === 0) {
+              console.info("[Index.tsx] No upcoming tasks returned or feature unavailable.");
+            }
           } catch (err) {
             console.error("[Index.tsx] Error during Promise.all fetchData:", err);
             fetchError = err instanceof Error ? err : new Error('Unknown error during fetch');
@@ -132,6 +210,7 @@ export default function Index() {
             setTasks([]);
             setProjects([]);
             setUserProfile(null);
+            setUpcomingTasks([]);
              // If fetch fails due to auth, clear token and redirect
              if ((err as any)?.message?.includes('Authentication failed')) {
                 localStorage.removeItem("todoist_token");
@@ -162,6 +241,7 @@ export default function Index() {
     setTasks([]); // Clear data on logout
     setProjects([]);
     setUserProfile(null);
+    setUpcomingTasks([]);
     navigate("/auth");
   };
 
@@ -208,6 +288,14 @@ export default function Index() {
   );
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat("en-US"), []);
+
+  const projectLookup = useMemo(() => {
+    const map = new Map<string, TodoistProject>();
+    projects.forEach((project) => {
+      map.set(project.id, project);
+    });
+    return map;
+  }, [projects]);
 
   const resolvedAvatarUrl = useMemo(() => {
     if (!userProfile) {
@@ -605,6 +693,92 @@ export default function Index() {
             </aside>
           </section>
 
+          <section className="rounded-[2.5rem] border border-white/10 bg-background/90 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Action plan</h2>
+                <p className="text-sm text-muted-foreground">
+                  {totalActionable > 0
+                    ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
+                    : "We couldn’t find any active tasks with due dates. Add a few in Todoist to activate the planner."}
+                </p>
+              </div>
+              <Badge
+                variant="secondary"
+                className="w-fit rounded-full border border-primary/30 bg-primary/10 text-xs uppercase tracking-[0.28em] text-primary"
+              >
+                Live Todoist sync
+              </Badge>
+            </div>
+            <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+              {planColumnMeta.map((column) => {
+                const bucket = actionPlan[column.key];
+                return (
+                  <div
+                    key={column.key}
+                    className="relative overflow-hidden rounded-3xl border border-white/10 bg-background/85 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]"
+                  >
+                    <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${column.gradient}`} />
+                    <div className="relative space-y-4">
+                      <div>
+                        <h3 className="text-base font-semibold text-foreground">{column.title}</h3>
+                        <p className="text-xs text-muted-foreground">{column.description}</p>
+                      </div>
+                      {bucket.length ? (
+                        <ul className="space-y-3">
+                          {bucket.slice(0, ACTION_PLAN_LIMIT).map((item) => (
+                            <li
+                              key={item.id}
+                              className="group rounded-2xl border border-white/10 bg-background/80 p-4 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.55)]"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                                    {item.content}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{item.projectName}</p>
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={`rounded-full border px-2 py-1 text-[11px] ${item.priorityTone}`}
+                                >
+                                  {item.priorityLabel}
+                                </Badge>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground/80">
+                                <span>{item.dueLabel}</span>
+                                {item.url ? (
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-primary transition-colors hover:text-primary/80"
+                                  >
+                                    Open
+                                    <ArrowUpRight className="h-3 w-3" />
+                                  </a>
+                                ) : null}
+                              </div>
+                            </li>
+                          ))}
+                          {bucket.length > ACTION_PLAN_LIMIT && (
+                            <p className="text-xs text-muted-foreground/70">
+                              +{bucket.length - ACTION_PLAN_LIMIT} more queued in Todoist
+                            </p>
+                          )}
+                        </ul>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-white/15 bg-background/70 p-4 text-sm text-muted-foreground">
+                          {column.emptyState}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
           <section className="rounded-[2.5rem] border border-white/10 bg-background/85 p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -842,3 +1016,173 @@ export default function Index() {
     </div>
   );
 }
+  const resolveDueDate = useCallback((task: TodoistActiveTask) => {
+    if (!task.due) {
+      return null;
+    }
+    const raw = task.due.datetime ?? task.due.date;
+    if (!raw) {
+      return null;
+    }
+    const parsed = parseISO(raw);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }, []);
+
+  type ActionPlanItem = {
+    id: string;
+    content: string;
+    projectName: string;
+    dueLabel: string;
+    priorityLabel: string;
+    priorityTone: string;
+    url?: string;
+  };
+
+  type ActionPlanBuckets = Record<
+    "overdue" | "today" | "upcoming" | "unscheduled",
+    ActionPlanItem[]
+  >;
+
+  const actionPlan = useMemo(() => {
+    const buckets: ActionPlanBuckets = {
+      overdue: [],
+      today: [],
+      upcoming: [],
+      unscheduled: [],
+    };
+
+    if (!upcomingTasks.length) {
+      return buckets;
+    }
+
+    const todayStart = startOfDay(new Date());
+
+    const toPriority = (value: number) => {
+      switch (value) {
+        case 4:
+          return {
+            label: "Urgent",
+            tone: "border-destructive/40 text-destructive",
+          };
+        case 3:
+          return {
+            label: "High",
+            tone: "border-amber-400/60 text-amber-300",
+          };
+        case 2:
+          return {
+            label: "Medium",
+            tone: "border-sky-400/50 text-sky-300",
+          };
+        default:
+          return {
+            label: "Low",
+            tone: "border-muted/40 text-muted-foreground",
+          };
+      }
+    };
+
+    upcomingTasks.forEach((task) => {
+      const dueDate = resolveDueDate(task);
+      const projectName = projectLookup.get(task.project_id)?.name ?? "Inbox";
+      const { label: priorityLabel, tone: priorityTone } = toPriority(task.priority);
+
+      const addToBucket = (bucket: keyof typeof buckets, dueLabel: string) => {
+        buckets[bucket].push({
+          id: task.id,
+          content: task.content,
+          projectName,
+          dueLabel,
+          priorityLabel,
+          priorityTone,
+          url: task.url,
+        });
+      };
+
+      if (!dueDate) {
+        addToBucket("unscheduled", "No due date");
+        return;
+      }
+
+      const dayDiff = differenceInCalendarDays(startOfDay(dueDate), todayStart);
+
+      if (dayDiff < 0) {
+        const overdueLabel = dayDiff === -1 ? "1 day overdue" : `${Math.abs(dayDiff)} days overdue`;
+        addToBucket("overdue", overdueLabel);
+        return;
+      }
+
+      if (dayDiff === 0) {
+        addToBucket("today", "Today");
+        return;
+      }
+
+      if (dayDiff === 1) {
+        addToBucket("upcoming", "Tomorrow");
+        return;
+      }
+
+      addToBucket("upcoming", `In ${dayDiff} days`);
+    });
+
+    return buckets;
+  }, [projectLookup, resolveDueDate, upcomingTasks]);
+
+  const totalActionable = useMemo(
+    () =>
+      actionPlan.overdue.length +
+      actionPlan.today.length +
+      actionPlan.upcoming.length +
+      actionPlan.unscheduled.length,
+    [actionPlan.overdue.length, actionPlan.today.length, actionPlan.unscheduled.length, actionPlan.upcoming.length],
+  );
+
+  const ACTION_PLAN_LIMIT = 4;
+
+  const totalActionableLabel = useMemo(
+    () => numberFormatter.format(totalActionable),
+    [numberFormatter, totalActionable],
+  );
+
+  const actionableNoun = useMemo(
+    () => (totalActionable === 1 ? "task" : "tasks"),
+    [totalActionable],
+  );
+
+  const planColumnMeta = useMemo(
+    () => {
+      const owner = userFirstName ?? "You";
+      return [
+        {
+          key: "overdue" as const,
+          title: "Catch up",
+          description: `${owner} can clear these first`,
+          gradient: "from-destructive/25 via-destructive/10 to-transparent",
+          emptyState: "No overdue tasks — momentum secured!",
+        },
+        {
+          key: "today" as const,
+          title: "Today focus",
+          description: `${owner} can move the day forward`,
+          gradient: "from-primary/20 via-primary/5 to-transparent",
+          emptyState: "Nothing else due today.",
+        },
+        {
+          key: "upcoming" as const,
+          title: "Next up",
+          description: "Lock in your next wins",
+          gradient: "from-emerald-300/20 via-emerald-200/10 to-transparent",
+          emptyState: "You’re ahead for the week.",
+        },
+        {
+          key: "unscheduled" as const,
+          title: "Backlog gems",
+          description: "Schedule these to keep momentum",
+          gradient: "from-muted/30 via-muted/10 to-transparent",
+          emptyState: "Everything has a home.",
+        },
+      ];
+    },
+    [userFirstName],
+  );
+
