@@ -425,42 +425,49 @@ export default function Index() {
     [totalActionable],
   );
 
-  const planColumnMeta = useMemo(
-    () => {
-      const owner = userFirstName ?? "You";
-      return [
-        {
-          key: "overdue" as const,
-          title: "Catch up",
-          description: `${owner} can clear these first`,
-          gradient: "from-destructive/25 via-destructive/10 to-transparent",
-          emptyState: "No overdue tasks — momentum secured!",
-        },
-        {
-          key: "today" as const,
-          title: "Today focus",
-          description: `${owner} can move the day forward`,
-          gradient: "from-primary/20 via-primary/5 to-transparent",
-          emptyState: "Nothing else due today.",
-        },
-        {
-          key: "upcoming" as const,
-          title: "Next up",
-          description: "Lock in your next wins",
-          gradient: "from-emerald-300/20 via-emerald-200/10 to-transparent",
-          emptyState: "You’re ahead for the week.",
-        },
-        {
-          key: "unscheduled" as const,
-          title: "Backlog gems",
-          description: "Schedule these to keep momentum",
-          gradient: "from-muted/30 via-muted/10 to-transparent",
-          emptyState: "Everything has a home.",
-        },
-      ];
-    },
-    [userFirstName],
-  );
+  const userFirstName = useMemo(() => {
+    if (userProfile?.full_name) {
+      return userProfile.full_name.trim().split(/\s+/)[0];
+    }
+    if (useSampleData) {
+      return "Explorer";
+    }
+    return null;
+  }, [userProfile?.full_name, useSampleData]);
+
+  const planColumnMeta = useMemo(() => {
+    const owner = userFirstName ?? "You";
+    return [
+      {
+        key: "overdue" as const,
+        title: "Catch up",
+        description: `${owner} can clear these first`,
+        gradient: "from-destructive/25 via-destructive/10 to-transparent",
+        emptyState: "No overdue tasks - momentum secured!",
+      },
+      {
+        key: "today" as const,
+        title: "Today focus",
+        description: `${owner} can move the day forward`,
+        gradient: "from-primary/20 via-primary/5 to-transparent",
+        emptyState: "Nothing else due today.",
+      },
+      {
+        key: "upcoming" as const,
+        title: "Next up",
+        description: "Lock in your next wins",
+        gradient: "from-emerald-300/20 via-emerald-200/10 to-transparent",
+        emptyState: "You're ahead for the week.",
+      },
+      {
+        key: "unscheduled" as const,
+        title: "Backlog gems",
+        description: "Schedule these to keep momentum",
+        gradient: "from-muted/30 via-muted/10 to-transparent",
+        emptyState: "Everything has a home.",
+      },
+    ];
+  }, [userFirstName]);
 
   const resolvedAvatarUrl = useMemo(() => {
     if (!userProfile) {
@@ -492,16 +499,6 @@ export default function Index() {
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
   }, [userProfile, useSampleData]);
 
-  const userFirstName = useMemo(() => {
-    if (userProfile?.full_name) {
-      return userProfile.full_name.trim().split(/\s+/)[0];
-    }
-    if (useSampleData) {
-      return "Explorer";
-    }
-    return null;
-  }, [userProfile?.full_name, useSampleData]);
-
   const formattedRangeLabel = useMemo(() => {
     if (
       !dateRange?.from ||
@@ -516,11 +513,11 @@ export default function Index() {
       dateRange.from.getFullYear() === dateRange.to.getFullYear();
 
     return sameYear
-      ? `${format(dateRange.from, "MMM d")} – ${format(
+      ? `${format(dateRange.from, "MMM d")} - ${format(
           dateRange.to,
           "MMM d",
         )}`
-      : `${format(dateRange.from, "MMM d, yyyy")} – ${format(
+      : `${format(dateRange.from, "MMM d, yyyy")} - ${format(
           dateRange.to,
           "MMM d, yyyy",
         )}`;
@@ -543,7 +540,7 @@ export default function Index() {
 
   const topHourLabel = useMemo(() => {
     if (!topHour) {
-      return "—";
+      return "-";
     }
 
     const base = setHours(startOfDay(new Date()), topHour.hour);
@@ -582,7 +579,7 @@ export default function Index() {
 
   const focusTip = useMemo(() => {
     const base =
-      topHourLabel === "—"
+      topHourLabel === "-"
         ? "Identify your most energetic hour and block it on the calendar."
         : `Protect your ${topHourLabel.toLowerCase()} slot for deep work today.`;
 
@@ -590,7 +587,7 @@ export default function Index() {
       return base;
     }
 
-    return topHourLabel === "—"
+    return topHourLabel === "-"
       ? `${userFirstName}, find your most energetic hour and block it on the calendar.`
       : `${userFirstName}, protect your ${topHourLabel.toLowerCase()} slot for deep work today.`;
   }, [topHourLabel, userFirstName]);
@@ -614,7 +611,7 @@ export default function Index() {
   };
 
   const handleShareHighlight = () => {
-    const summary = `DoneGlow snapshot · ${numberFormatter.format(
+    const summary = `DoneGlow snapshot - ${numberFormatter.format(
       filteredTasks.length,
     )} tasks completed ${formattedRangeLabel}.`;
 
@@ -868,7 +865,7 @@ export default function Index() {
                   <p className="text-sm text-muted-foreground">
                     {totalActionable > 0
                       ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
-                      : "We couldn’t find any active tasks with due dates. Add a few in Todoist to activate the planner."}
+                      : "We couldn't find any active tasks with due dates. Add a few in Todoist to activate the planner."}
                   </p>
                 </div>
                 <Badge
@@ -1206,7 +1203,7 @@ export default function Index() {
       {/* Footer */}
       <footer className="mt-16 bg-background/95">
         <div className="mx-auto max-w-7xl border-t border-white/5 px-4 py-8 text-center text-xs text-muted-foreground lg:px-8">
-          DoneGlow · Visualizing your Todoist progress.
+          DoneGlow - Visualizing your Todoist progress.
           {useSampleData && (
             <Badge
               variant="outline"
