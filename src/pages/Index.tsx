@@ -22,7 +22,9 @@ import {
   calculateHourStats,
   calculateRecapStats,
 } from "@/lib/todoist";
-import { subDays, startOfDay, isAfter, isBefore } from "date-fns";
+// --- *** IMPORT 'format' HERE *** ---
+import { subDays, startOfDay, isAfter, isBefore, format } from "date-fns";
+// --- *** END IMPORT FIX *** ---
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 
@@ -40,42 +42,84 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
 
-  useEffect(() => {
+ // --- useEffect Hook (from previous step) ---
+ useEffect(() => {
     const token = localStorage.getItem("todoist_token");
     if (!token) {
+      console.log("[Index.tsx] No token found, navigating to /auth");
       navigate("/auth");
       return;
     }
 
+    // Define an async function inside useEffect to allow awaiting promises
     const fetchData = async () => {
+      // Reset states at the beginning of each fetch attempt
+      console.log("[Index.tsx] Starting fetchData...");
+      setIsLoading(true);
+      setError(null); // Explicitly clear previous errors
+
+      // Exit early if using sample data
       if (useSampleData) {
-        setTasks(generateMockTasks(30));
-        setProjects(generateMockProjects());
-        setIsLoading(false);
-        setError(null);
+        console.log("[Index.tsx] Using sample data.");
+        try {
+            // Simulate async loading slightly even for sample data
+            await new Promise(resolve => setTimeout(resolve, 100));
+            setTasks(generateMockTasks(90)); // Use a decent amount for testing layouts
+            setProjects(generateMockProjects());
+        } catch (sampleErr) {
+             console.error("[Index.tsx] Error generating sample data:", sampleErr);
+             setError("Failed to load sample data.");
+        } finally {
+             setIsLoading(false);
+        }
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
+      // Fetch real data
+      let fetchedTasks: TodoistTask[] = [];
+      let fetchedProjects: TodoistProject[] = [];
+      let fetchError: Error | null = null;
 
       try {
-        const [fetchedTasks, fetchedProjects] = await Promise.all([
-          fetchCompletedTasks(token, subDays(new Date(), 90).toISOString()),
+        console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
+        // Use Promise.all again, but handle potential errors carefully
+        [fetchedTasks, fetchedProjects] = await Promise.all([
+          fetchCompletedTasks(token /* Removed date arg, let fetchCompletedTasks handle defaults if needed */),
           fetchProjects(token),
         ]);
+
+        console.log(`[Index.tsx] Successfully fetched ${fetchedTasks.length} tasks and ${fetchedProjects.length} projects.`);
+
+        // *** Crucial: Set state only after BOTH promises succeed ***
         setTasks(fetchedTasks);
         setProjects(fetchedProjects);
+
       } catch (err) {
-        setError("Invalid Todoist token or unable to fetch data.");
-        console.error("Error fetching Todoist data:", err);
+        // Log the specific error
+        console.error("[Index.tsx] Error during Promise.all fetchData:", err);
+        fetchError = err instanceof Error ? err : new Error('Unknown error during fetch');
+        // Set a user-friendly error message including the caught error
+        setError(`Failed to fetch data: ${fetchError.message}. Please check your connection or API token.`);
+        // Clear data states on error to prevent displaying stale data
+        setTasks([]);
+        setProjects([]);
       } finally {
-        setIsLoading(false);
+        console.log("[Index.tsx] fetchData finished, setting isLoading to false.");
+        setIsLoading(false); // Ensure loading is always turned off
       }
     };
 
-    fetchData();
-  }, [navigate, useSampleData]);
+    fetchData(); // Call the async function
+
+    // Cleanup function (optional, runs if component unmounts or deps change)
+    return () => {
+        console.log("[Index.tsx] Cleanup useEffect");
+        // You could add logic here to cancel ongoing fetches if needed
+    };
+
+  }, [navigate, useSampleData]); // Dependencies for useEffect
+ // --- END useEffect Hook ---
+
 
   const handleLogout = () => {
     localStorage.removeItem("todoist_token");
@@ -92,24 +136,28 @@ export default function Index() {
 
   // Filter tasks by date range
   const filteredTasks = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) return processedTasks;
+    if (!dateRange?.from || !dateRange?.to || isNaN(dateRange.from.getTime()) || isNaN(dateRange.to.getTime())) {
+       console.warn("[Index.tsx] Invalid dateRange for filtering:", dateRange);
+       return processedTasks;
+    }
+
+    const rangeStart = startOfDay(dateRange.from);
+    const rangeEnd = startOfDay(dateRange.to);
+
     const filtered = processedTasks.filter((task) => {
-      const taskDate = startOfDay(task.completedDate);
-      return (
-        (isAfter(taskDate, dateRange.from!) ||
-          taskDate.getTime() === dateRange.from!.getTime()) &&
-        (isBefore(taskDate, dateRange.to!) ||
-          taskDate.getTime() === dateRange.to!.getTime())
-      );
+      if (!task.completedDate || isNaN(task.completedDate.getTime())) {
+          return false;
+      }
+      const taskDayStart = startOfDay(task.completedDate);
+      return !isBefore(taskDayStart, rangeStart) && !isAfter(taskDayStart, rangeEnd);
     });
 
-    // Debug logging for development
     if (import.meta.env.DEV) {
       console.log(
         `📊 Tasks: ${processedTasks.length} total, ${
           filtered.length
-        } filtered for ${dateRange?.from?.toISOString().split("T")[0]} to ${
-          dateRange?.to?.toISOString().split("T")[0]
+        } filtered for ${format(rangeStart, "yyyy-MM-dd")} to ${ // format is used here
+          format(rangeEnd, "yyyy-MM-dd") // and here
         }`
       );
     }
@@ -117,13 +165,13 @@ export default function Index() {
     return filtered;
   }, [processedTasks, dateRange]);
 
+  // Memoize calculated stats based on filtered tasks and projects
   const dayStats = useMemo(
-    () =>
-      calculateDayStats(
-        filteredTasks,
-        dateRange?.from || subDays(new Date(), 30),
-        dateRange?.to || new Date()
-      ),
+    () => {
+        const fromDate = dateRange?.from && !isNaN(dateRange.from.getTime()) ? dateRange.from : subDays(new Date(), 30);
+        const toDate = dateRange?.to && !isNaN(dateRange.to.getTime()) ? dateRange.to : new Date();
+        return calculateDayStats(filteredTasks, fromDate, toDate);
+    },
     [filteredTasks, dateRange]
   );
   const projectStats = useMemo(
@@ -138,6 +186,20 @@ export default function Index() {
     () => calculateRecapStats(dayStats, projectStats),
     [dayStats, projectStats]
   );
+
+  // Function reference for Retry button (needed if button is outside useEffect scope)
+   const triggerFetchData = () => {
+       // A simple way to re-trigger useEffect is to change a dependency,
+       // but since `useSampleData` is already a dependency, we can toggle it
+       // or introduce another state if needed. A direct call isn't standard practice here.
+       // For simplicity, let's just reload or guide user to re-login if token is suspect.
+       // Or, if `useSampleData` state is not critical for other logic, use it:
+       // setUseSampleData(false); // This would re-trigger useEffect if it was true
+       // If it was already false, we might need a dedicated 'retry' state trigger.
+       // Let's just reload for now as a simple retry mechanism:
+       window.location.reload();
+   };
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -179,6 +241,7 @@ export default function Index() {
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2">Loading data...</span>
           </div>
         ) : error ? (
           <div className="space-y-4">
@@ -186,22 +249,27 @@ export default function Index() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
             <Button onClick={() => setUseSampleData(true)} variant="outline">
-              Use Sample Data
+              Use Sample Data Instead
             </Button>
+             <Button onClick={triggerFetchData} variant="default"> {/* Updated onClick handler */}
+               Retry Fetching Data
+             </Button>
           </div>
-        ) : tasks.length === 0 ? (
+        // Check if projects are loaded but tasks are empty *after* successful fetch
+        ) : !isLoading && !error && projects.length > 0 && tasks.length === 0 ? (
           <div className="space-y-4">
             <Alert>
               <AlertDescription>
-                No completed tasks found. Complete some tasks in Todoist to see
-                your data visualized here!
+                Successfully connected to Todoist and fetched projects, but no completed tasks were found in your history.
+                Complete some tasks in Todoist and refresh to see your data visualized here!
               </AlertDescription>
             </Alert>
             <Button onClick={() => setUseSampleData(true)} variant="outline">
               Use Sample Data
             </Button>
           </div>
-        ) : (
+        // Check if both tasks and projects are loaded
+        ) : !isLoading && !error && tasks.length > 0 && projects.length > 0 ? (
           <>
             {/* Filters */}
             <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
@@ -217,13 +285,29 @@ export default function Index() {
                   onDayClick={handleDayClick}
                 />
               </div>
-              <WeeklyFocusStacks data={dayStats} projects={projectStats} />
-              <ProjectShareDonut data={projectStats} />
+              {/* Conditionally render charts only if data exists */}
+              {projectStats.length > 0 && <WeeklyFocusStacks data={dayStats} projects={projectStats} />}
+              {projectStats.length > 0 && <ProjectShareDonut data={projectStats} />}
               <div className="lg:col-span-2">
-                <TimeOfDayRhythm data={hourStats} />
+                 {hourStats.length > 0 && <TimeOfDayRhythm data={hourStats} />}
               </div>
             </div>
           </>
+        ) : (
+             // Fallback for unexpected states
+             <div className="space-y-4">
+                <Alert>
+                   <AlertDescription>
+                     Loading completed or data is unavailable in the expected format. Please try again.
+                   </AlertDescription>
+                </Alert>
+                 <Button onClick={() => setUseSampleData(true)} variant="outline">
+                   Use Sample Data
+                 </Button>
+                  <Button onClick={triggerFetchData} variant="default">
+                   Retry Fetching Data
+                 </Button>
+             </div>
         )}
       </main>
 
