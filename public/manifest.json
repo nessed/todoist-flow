@@ -1,0 +1,23 @@
+{
+    "name": "DoneGlow",
+    "short_name": "DoneGlow",
+    "description": "Visualize your Todoist Achievements",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff", // Match your light theme background
+    "theme_color": "#ff6f61", // Match your primary theme color (adjust HSL if needed)
+    "icons": [
+      {
+        "src": "/icons/icon-192x192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any maskable"
+      },
+      {
+        "src": "/icons/icon-512x512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+         "purpose": "any maskable"
+      }
+    ]
+  }
