@@ -54,6 +54,34 @@ import {
 } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+const ACTION_PLAN_LIMIT = 4;
+
+const resolveDueDate = (task: TodoistActiveTask) => {
+  if (!task.due) {
+    return null;
+  }
+
+  const raw = task.due.datetime ?? task.due.date;
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = parseISO(raw);
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+type ActionPlanItem = {
+  id: string;
+  content: string;
+  projectName: string;
+  dueLabel: string;
+  priorityLabel: string;
+  priorityTone: string;
+  url?: string;
+};
+
+type ActionPlanBuckets = Record<"overdue" | "today" | "upcoming" | "unscheduled", ActionPlanItem[]>;
+
 export default function Index() {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState<DayStats | null>(null);
@@ -296,6 +324,143 @@ export default function Index() {
     });
     return map;
   }, [projects]);
+
+  const actionPlan = useMemo(() => {
+    const buckets: ActionPlanBuckets = {
+      overdue: [],
+      today: [],
+      upcoming: [],
+      unscheduled: [],
+    };
+
+    if (!upcomingTasks.length) {
+      return buckets;
+    }
+
+    const todayStart = startOfDay(new Date());
+
+    const toPriority = (value: number) => {
+      switch (value) {
+        case 4:
+          return {
+            label: "Urgent",
+            tone: "border-destructive/40 text-destructive",
+          };
+        case 3:
+          return {
+            label: "High",
+            tone: "border-amber-400/60 text-amber-300",
+          };
+        case 2:
+          return {
+            label: "Medium",
+            tone: "border-sky-400/50 text-sky-300",
+          };
+        default:
+          return {
+            label: "Low",
+            tone: "border-muted/40 text-muted-foreground",
+          };
+      }
+    };
+
+    upcomingTasks.forEach((task) => {
+      const dueDate = resolveDueDate(task);
+      const projectName = projectLookup.get(task.project_id)?.name ?? "Inbox";
+      const { label: priorityLabel, tone: priorityTone } = toPriority(task.priority);
+
+      const addToBucket = (bucket: keyof typeof buckets, dueLabel: string) => {
+        buckets[bucket].push({
+          id: task.id,
+          content: task.content,
+          projectName,
+          dueLabel,
+          priorityLabel,
+          priorityTone,
+          url: task.url,
+        });
+      };
+
+      if (!dueDate) {
+        addToBucket("unscheduled", "No due date");
+        return;
+      }
+
+      const dayDiff = differenceInCalendarDays(startOfDay(dueDate), todayStart);
+
+      if (dayDiff < 0) {
+        const overdueLabel = dayDiff === -1 ? "1 day overdue" : `${Math.abs(dayDiff)} days overdue`;
+        addToBucket("overdue", overdueLabel);
+        return;
+      }
+
+      if (dayDiff === 0) {
+        addToBucket("today", "Today");
+        return;
+      }
+
+      if (dayDiff === 1) {
+        addToBucket("upcoming", "Tomorrow");
+        return;
+      }
+
+      addToBucket("upcoming", `In ${dayDiff} days`);
+    });
+
+    return buckets;
+  }, [projectLookup, upcomingTasks]);
+
+  const totalActionable = useMemo(
+    () => Object.values(actionPlan).reduce((sum, bucket) => sum + bucket.length, 0),
+    [actionPlan],
+  );
+
+  const totalActionableLabel = useMemo(
+    () => numberFormatter.format(totalActionable),
+    [numberFormatter, totalActionable],
+  );
+
+  const actionableNoun = useMemo(
+    () => (totalActionable === 1 ? "task" : "tasks"),
+    [totalActionable],
+  );
+
+  const planColumnMeta = useMemo(
+    () => {
+      const owner = userFirstName ?? "You";
+      return [
+        {
+          key: "overdue" as const,
+          title: "Catch up",
+          description: `${owner} can clear these first`,
+          gradient: "from-destructive/25 via-destructive/10 to-transparent",
+          emptyState: "No overdue tasks — momentum secured!",
+        },
+        {
+          key: "today" as const,
+          title: "Today focus",
+          description: `${owner} can move the day forward`,
+          gradient: "from-primary/20 via-primary/5 to-transparent",
+          emptyState: "Nothing else due today.",
+        },
+        {
+          key: "upcoming" as const,
+          title: "Next up",
+          description: "Lock in your next wins",
+          gradient: "from-emerald-300/20 via-emerald-200/10 to-transparent",
+          emptyState: "You’re ahead for the week.",
+        },
+        {
+          key: "unscheduled" as const,
+          title: "Backlog gems",
+          description: "Schedule these to keep momentum",
+          gradient: "from-muted/30 via-muted/10 to-transparent",
+          emptyState: "Everything has a home.",
+        },
+      ];
+    },
+    [userFirstName],
+  );
 
   const resolvedAvatarUrl = useMemo(() => {
     if (!userProfile) {
