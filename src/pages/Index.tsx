@@ -425,6 +425,16 @@ export default function Index() {
     [totalActionable],
   );
 
+  const userFirstName = useMemo(() => {
+    if (userProfile?.full_name) {
+      return userProfile.full_name.trim().split(/\s+/)[0];
+    }
+    if (useSampleData) {
+      return "Explorer";
+    }
+    return null;
+  }, [userProfile?.full_name, useSampleData]);
+
   const planColumnMeta = useMemo(
     () => {
       const owner = userFirstName ?? "You";
@@ -491,16 +501,6 @@ export default function Index() {
     }
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
   }, [userProfile, useSampleData]);
-
-  const userFirstName = useMemo(() => {
-    if (userProfile?.full_name) {
-      return userProfile.full_name.trim().split(/\s+/)[0];
-    }
-    if (useSampleData) {
-      return "Explorer";
-    }
-    return null;
-  }, [userProfile?.full_name, useSampleData]);
 
   const formattedRangeLabel = useMemo(() => {
     if (
