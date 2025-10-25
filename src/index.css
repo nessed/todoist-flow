@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 
@@ -121,7 +121,43 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  /* --- Updated body style --- */
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    position: relative; /* Needed for pseudo-element positioning */
+    overflow-x: hidden; /* Prevent horizontal scrollbar from large shapes */
+    z-index: 0; /* Ensure body context is behind pseudo-elements */
   }
+
+  /* --- Add these pseudo-elements for the shapes --- */
+  body::before,
+  body::after {
+    content: "";
+    position: fixed; /* Fixed position so they don't scroll */
+    border-radius: 50%;
+    opacity: 0.08; /* Very low opacity */
+    z-index: -1; /* Place behind content */
+    pointer-events: none; /* Make them non-interactive */
+    filter: blur(100px); /* Heavy blur for softness */
+  }
+
+  /* First Circle (e.g., primary color) */
+  body::before {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%);
+    top: -150px; /* Position off-screen */
+    left: -200px;
+  }
+
+  /* Second Circle (e.g., chart-2 color) */
+  body::after {
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, hsl(var(--chart-2)) 0%, transparent 70%);
+    bottom: -200px; /* Position off-screen */
+    right: -250px;
+  }
+  /* --- End shapes --- */
 }

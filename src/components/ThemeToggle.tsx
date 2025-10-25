@@ -3,15 +3,24 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  // Set the initial useState default to 'dark'
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
     const root = window.document.documentElement;
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const initialTheme = savedTheme || "light";
+    // --- Change the fallback value from "light" to "dark" ---
+    const initialTheme = savedTheme || "dark";
+    // --- End Change ---
     setTheme(initialTheme);
     root.classList.toggle("dark", initialTheme === "dark");
-  }, []);
+
+    // Add 'dark' class initially if it's the default and no saved theme exists
+    if (!savedTheme) {
+        root.classList.add("dark");
+    }
+
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
