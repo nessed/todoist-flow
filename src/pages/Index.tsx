@@ -10,6 +10,7 @@ import { Filters } from "@/components/Filters";
 import { TaskDrilldown } from "@/components/TaskDrilldown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   CheckCircle2,
   Download,
@@ -208,6 +209,46 @@ export default function Index() {
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat("en-US"), []);
 
+  const resolvedAvatarUrl = useMemo(() => {
+    if (!userProfile) {
+      return null;
+    }
+
+    if (userProfile.avatar_url) {
+      return userProfile.avatar_url.startsWith("//")
+        ? `https:${userProfile.avatar_url}`
+        : userProfile.avatar_url;
+    }
+
+    if (userProfile.image_id) {
+      return `https://dcff1xvirvpb3.cloudfront.net/${userProfile.image_id}.jpg`;
+    }
+
+    return null;
+  }, [userProfile]);
+
+  const userInitials = useMemo(() => {
+    const fullName = userProfile?.full_name ?? (useSampleData ? "DoneGlow Explorer" : "");
+    if (!fullName) {
+      return "DG";
+    }
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].charAt(0).toUpperCase();
+    }
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+  }, [userProfile, useSampleData]);
+
+  const userFirstName = useMemo(() => {
+    if (userProfile?.full_name) {
+      return userProfile.full_name.trim().split(/\s+/)[0];
+    }
+    if (useSampleData) {
+      return "Explorer";
+    }
+    return null;
+  }, [userProfile?.full_name, useSampleData]);
+
   const formattedRangeLabel = useMemo(() => {
     if (
       !dateRange?.from ||
@@ -286,12 +327,27 @@ export default function Index() {
     ],
   );
 
-  const focusTip = useMemo(
-    () =>
+  const focusTip = useMemo(() => {
+    const base =
       topHourLabel === "—"
         ? "Identify your most energetic hour and block it on the calendar."
-        : `Protect your ${topHourLabel.toLowerCase()} slot for deep work today.`,
-    [topHourLabel],
+        : `Protect your ${topHourLabel.toLowerCase()} slot for deep work today.`;
+
+    if (!userFirstName) {
+      return base;
+    }
+
+    return topHourLabel === "—"
+      ? `${userFirstName}, find your most energetic hour and block it on the calendar.`
+      : `${userFirstName}, protect your ${topHourLabel.toLowerCase()} slot for deep work today.`;
+  }, [topHourLabel, userFirstName]);
+
+  const heroHeadline = useMemo(
+    () =>
+      userFirstName
+        ? `${userFirstName}, command your Todoist momentum`
+        : "Command your Todoist momentum",
+    [userFirstName],
   );
 
   const hasStoredToken =
@@ -413,11 +469,33 @@ export default function Index() {
                       Desktop spotlight
                     </Badge>
                     <h2 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                      Command your Todoist momentum
+                      {heroHeadline}
                     </h2>
                     <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
                       Elevate the desktop view with richer context, deeper insights, and quick actions designed for power users.
                     </p>
+                    {userProfile && (
+                      <div className="mt-6 flex items-center gap-4 rounded-3xl border border-white/10 bg-background/75 p-4 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.55)]">
+                        <Avatar className="h-12 w-12 border border-white/10">
+                          {resolvedAvatarUrl ? (
+                            <AvatarImage src={resolvedAvatarUrl} alt={userProfile.full_name} />
+                          ) : null}
+                          <AvatarFallback className="text-base font-semibold text-foreground">
+                            {userInitials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {userProfile.full_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {userProfile.timezone
+                              ? `Working in ${userProfile.timezone}`
+                              : "Connected Todoist account"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {useSampleData && (
                       <Badge
                         variant="outline"
@@ -480,7 +558,7 @@ export default function Index() {
               <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
                 <span className="inline-flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  Focus pulse
+                  {userFirstName ? `${userFirstName}'s focus pulse` : "Focus pulse"}
                 </span>
                 <ArrowUpRight className="h-4 w-4 text-muted-foreground/60" />
               </div>
@@ -653,77 +731,77 @@ export default function Index() {
                 </span>
               </div>
             </div>
-            {userProfile && (
-              <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-background/80 px-3 py-1.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)] md:flex">
-                <Avatar className="h-8 w-8 border border-white/10">
-                  {resolvedAvatarUrl ? (
-                    <AvatarImage src={resolvedAvatarUrl} alt={userProfile.full_name} />
-                  ) : null}
-                  <AvatarFallback className="text-xs font-semibold text-foreground">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="leading-tight">
-                  <p className="text-sm font-medium text-foreground">
-                    {userProfile.full_name}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {useSampleData ? "Sample profile" : "Todoist account"}
-                  </p>
-                </div>
-              </div>
-            )}
-            <ThemeToggle />
-            {(!useSampleData && hasStoredToken) && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleLogout}
-                aria-label="Logout"
-                className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-            )}
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-background/80 px-3 py-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] md:flex">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={triggerFetchData}
-                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
-                aria-label="Refresh insights"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleExportSnapshot}
-                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
-                aria-label="Export snapshot"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleShareHighlight}
-                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
-                aria-label="Share highlight"
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
+            {tasks.length > 0 && (
+              <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-background/80 px-3 py-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] lg:flex">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={triggerFetchData}
+                  className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                  aria-label="Refresh insights"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleExportSnapshot}
+                  className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                  aria-label="Export snapshot"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleShareHighlight}
+                  className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                  aria-label="Share highlight"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-background/80 px-3 py-1.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]">
+              <Avatar className="h-8 w-8 border border-white/10">
+                {resolvedAvatarUrl ? (
+                  <AvatarImage src={resolvedAvatarUrl} alt={userProfile?.full_name ?? "DoneGlow explorer"} />
+                ) : null}
+                <AvatarFallback className="text-xs font-semibold text-foreground">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden text-left leading-tight sm:block">
+                <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground/70">
+                  {useSampleData ? "Sample mode" : "Welcome"}
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {userProfile?.full_name ?? "DoneGlow Explorer"}
+                </p>
+              </div>
             </div>
             <ThemeToggle />
             {(!useSampleData && hasStoredToken) && (
               <Button
                 variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="hidden items-center gap-2 rounded-full border border-transparent px-4 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:flex"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </Button>
+            )}
+            {(!useSampleData && hasStoredToken) && (
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={handleLogout}
                 aria-label="Logout"
-                className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:hidden"
               >
                 <LogOut className="h-5 w-5" />
               </Button>
