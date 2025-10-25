@@ -13,6 +13,9 @@ import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } fro
 
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
 const TODOIST_SYNC_API = "https://api.todoist.com/sync/v9";
+const TODOIST_OAUTH_AUTHORIZE = "https://todoist.com/oauth/authorize";
+const TODOIST_OAUTH_TOKEN = "https://todoist.com/oauth/access_token";
+const TODOIST_OAUTH_REVOKE = "https://api.todoist.com/rest/v2/token/revoke";
 
 // --- Helper function MUST be defined BEFORE it's used ---
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
@@ -47,6 +50,124 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
   }
 }
 // --- End Helper function ---
+
+
+export type TodoistOAuthTokenResponse = {
+  access_token: string;
+  token_type?: string;
+  scope?: string;
+  expires_in?: number;
+  refresh_token?: string;
+};
+
+export function createTodoistAuthorizationUrl({
+  clientId,
+  redirectUri,
+  scope = "data:read,data:read_write,profile:read",
+  state,
+}: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  state: string;
+}): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    scope,
+    state,
+    redirect_uri: redirectUri,
+  });
+
+  return `${TODOIST_OAUTH_AUTHORIZE}?${params.toString()}`;
+}
+
+export async function exchangeTodoistAuthCode({
+  code,
+  clientId,
+  clientSecret,
+  redirectUri,
+}: {
+  code: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): Promise<TodoistOAuthTokenResponse> {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    redirect_uri: redirectUri,
+  });
+
+  const response = await fetch(TODOIST_OAUTH_TOKEN, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to exchange Todoist authorization code: ${response.status} ${response.statusText}${
+        errorText ? ` - ${errorText}` : ""
+      }`
+    );
+  }
+
+  const data = (await response.json()) as TodoistOAuthTokenResponse;
+
+  if (!data?.access_token) {
+    throw new Error("Todoist OAuth response did not include an access token.");
+  }
+
+  return data;
+}
+
+export async function revokeTodoistToken({
+  token,
+  clientId,
+  clientSecret,
+}: {
+  token: string;
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<boolean> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+
+    const bodyParams = new URLSearchParams({ token });
+
+    if (clientId && clientSecret) {
+      bodyParams.append("client_id", clientId);
+      bodyParams.append("client_secret", clientSecret);
+    }
+
+    const response = await fetch(TODOIST_OAUTH_REVOKE, {
+      method: "POST",
+      headers,
+      body: bodyParams.toString(),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.warn(
+        `[revokeTodoistToken] Token revocation returned ${response.status}: ${response.statusText}${
+          details ? ` - ${details}` : ""
+        }`
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("[revokeTodoistToken] Failed to revoke Todoist token", error);
+    return false;
+  }
+}
 
 
 export async function validateToken(token: string): Promise<boolean> {
