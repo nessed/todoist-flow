@@ -6,6 +6,23 @@ export interface TodoistTask {
   labels: string[];
 }
 
+export interface TodoistDueInfo {
+  date: string | null;
+  datetime: string | null;
+  timezone: string | null;
+}
+
+export interface TodoistActiveTask {
+  id: string;
+  content: string;
+  project_id: string;
+  labels: string[];
+  priority: number;
+  due: TodoistDueInfo | null;
+  section_id?: string | null;
+  url?: string;
+}
+
 export interface TodoistProject {
   id: string;
   name: string;
