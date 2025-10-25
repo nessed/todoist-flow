@@ -40,6 +40,7 @@ import {
   calculateRecapStats,
   fetchUserProfile,
   fetchUpcomingTasks,
+  revokeTodoistToken,
 } from "@/lib/todoist";
 import {
   subDays,
@@ -98,12 +99,25 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0); // trigger refetch without full reload
+  const [hasConnectedAccount, setHasConnectedAccount] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return Boolean(window.localStorage.getItem("todoist_token"));
+  });
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("todoist_token");
-    if (!token && !useSampleData) { // Adjusted condition
+    setHasConnectedAccount(Boolean(token));
+
+    if (!token && !useSampleData) {
       console.log("[Index.tsx] No token found, navigating to /auth");
       setUserProfile(null);
+      setTasks([]);
+      setProjects([]);
+      setUpcomingTasks([]);
+      setIsLoading(false);
       navigate("/auth");
       return;
     }
@@ -259,18 +273,42 @@ export default function Index() {
     fetchData();
 
     return () => {
-        console.log("[Index.tsx] Cleanup useEffect");
+      console.log("[Index.tsx] Cleanup useEffect");
     };
-
   }, [navigate, useSampleData, refreshTick]); // trigger re-fetch via refreshTick
 
-  const handleLogout = () => {
-    localStorage.removeItem("todoist_token");
-    setTasks([]); // Clear data on logout
-    setProjects([]);
-    setUserProfile(null);
-    setUpcomingTasks([]);
-    navigate("/auth");
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+
+    try {
+      const token = localStorage.getItem("todoist_token");
+
+      if (token) {
+        const clientId = import.meta.env.VITE_TODOIST_CLIENT_ID as string | undefined;
+        const clientSecret = import.meta.env.VITE_TODOIST_CLIENT_SECRET as string | undefined;
+
+        const revoked = await revokeTodoistToken({
+          token,
+          clientId,
+          clientSecret,
+        });
+
+        if (!revoked) {
+          console.warn("[Index.tsx] Todoist token revocation returned non-success. Clearing locally anyway.");
+        }
+      }
+
+      localStorage.removeItem("todoist_token");
+      setTasks([]);
+      setProjects([]);
+      setUserProfile(null);
+      setUpcomingTasks([]);
+      setHasConnectedAccount(false);
+      setUseSampleData(false);
+      navigate("/auth");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleDayClick = (day: DayStats) => {
@@ -599,10 +637,6 @@ export default function Index() {
         : "Command your Todoist momentum",
     [userFirstName],
   );
-
-  const hasStoredToken =
-    typeof window !== "undefined" &&
-    Boolean(localStorage.getItem("todoist_token"));
 
   const handleExportSnapshot = () => {
     if (typeof window !== "undefined") {
@@ -1153,30 +1187,37 @@ export default function Index() {
                 <p className="text-sm font-semibold text-foreground">
                   {userProfile?.full_name ?? "DoneGlow Explorer"}
                 </p>
+                {userProfile?.email && (
+                  <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-muted-foreground/60">
+                    {userProfile.email}
+                  </p>
+                )}
               </div>
             </div>
             <ThemeToggle />
-            {(!useSampleData && hasStoredToken) && (
+            {!useSampleData && hasConnectedAccount && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleLogout}
                 aria-label="Logout"
                 className="hidden items-center gap-2 rounded-full border border-transparent px-4 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:flex"
+                disabled={isLoggingOut}
               >
                 <LogOut className="h-4 w-4" />
-                <span>Sign out</span>
+                <span>{isLoggingOut ? "Signing out..." : "Sign out"}</span>
               </Button>
             )}
-            {(!useSampleData && hasStoredToken) && (
+            {!useSampleData && hasConnectedAccount && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
                 aria-label="Logout"
                 className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:hidden"
+                disabled={isLoggingOut}
               >
-                <LogOut className="h-5 w-5" />
+                {isLoggingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
               </Button>
             )}
           </div>
