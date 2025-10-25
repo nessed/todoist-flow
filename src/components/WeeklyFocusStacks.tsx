@@ -1,13 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DayStats, ProjectStats } from "@/types/todoist";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { format, parseISO, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
-import { ChartTooltipContent } from "@/components/ui/chart"; // Import custom tooltip if needed
-
-interface WeeklyFocusStacksProps {
-  data: DayStats[];
-  projects: ProjectStats[]; // Should now include "Other" if applicable
-}
+import { format } from "date-fns";
+import { startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 
 // Define chart colors outside the component
 const BASE_COLORS = [
@@ -19,15 +14,18 @@ const BASE_COLORS = [
 ];
 const OTHER_COLOR = "hsl(var(--muted-foreground) / 0.5)"; // Use a muted grey for "Other"
 
+interface WeeklyFocusStacksProps {
+  data: DayStats[];
+  projects: ProjectStats[];
+}
+
+
 export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
-  // Get current week
   const now = new Date();
-  // Ensure week starts on Monday (iso8601 standard)
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  // Map projects to their colors, assigning grey to "Other"
   const projectColorMap = new Map<string, string>();
   projects.forEach((project, index) => {
     projectColorMap.set(
@@ -38,45 +36,37 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
     );
   });
 
-  // Process data for stacked bar chart
   const chartData = weekDays.map((day) => {
     const dateKey = format(day, "yyyy-MM-dd");
     const dayData = data.find((d) => d.date === dateKey);
 
     const daySummary: { [key: string]: any } = {
-      day: format(day, "EEE"), // Short day name (Mon, Tue)
+      day: format(day, "EEE"),
       fullDate: dateKey,
-      total: dayData?.count || 0, // Add total for potential tooltip use
+      total: dayData?.count || 0,
     };
 
-    // Initialize counts for all projects (including "Other") to 0 for this day
     projects.forEach(p => {
         daySummary[p.projectName] = 0;
     });
 
-    // Populate counts from actual tasks for the day
     if (dayData) {
         dayData.tasks.forEach(task => {
-            // Find which projectStat this task belongs to (could be grouped into "Other")
             const projectStat = projects.find(p => p.projectId === task.project_id)
                              || projects.find(p => p.projectId === `unknown-${task.project_id}`)
                              || projects.find(p => p.projectId === 'no-project' && !task.project_id)
-                             || projects.find(p => p.projectId === 'other-projects'); // Fallback to "Other" if grouping happened
+                             || projects.find(p => p.projectId === 'other-projects');
 
             if (projectStat) {
                 daySummary[projectStat.projectName] = (daySummary[projectStat.projectName] || 0) + 1;
             } else {
-                // Should ideally map to "Other" if grouping logic is robust
                  console.warn(`Task ${task.id} on ${dateKey} could not be mapped to a project stat.`);
-                 // Optionally count towards a default "Unmapped" or directly "Other"
                  if (daySummary["Other"] !== undefined) {
                       daySummary["Other"] = (daySummary["Other"] || 0) + 1;
                  }
             }
         });
     }
-
-
     return daySummary;
   });
 
@@ -86,7 +76,6 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
       <CardHeader>
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-chart-2/20 to-chart-2/10 flex items-center justify-center">
-             {/* Simple static icon representation */}
              <svg viewBox="0 0 100 100" className="h-4 w-4 fill-chart-2">
                 <rect x="15" y="60" width="20" height="30" rx="3"/>
                 <rect x="40" y="40" width="20" height="50" rx="3"/>
@@ -97,25 +86,37 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={chartData} margin={{ top: 5, right: 30, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
-            <XAxis dataKey="day" className="text-xs" axisLine={false} tickLine={false} />
-            <YAxis className="text-xs" axisLine={false} tickLine={false} width={20}/>
+            <XAxis
+              dataKey="day"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+              dy={5}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={25}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+              dx={-5}
+            />
             <Tooltip
               cursor={{ fill: "hsl(var(--muted) / 0.5)" }}
               content={({ active, payload, label }) => {
                  if (active && payload && payload.length) {
                    return (
-                     <div className="rounded-lg border bg-background p-2 shadow-sm min-w-[150px]">
-                       <p className="font-medium mb-1">{label}</p> {/* Day Name */}
-                       {payload.slice().reverse().map((entry, index) => ( // Reverse to show top stack first
-                         <div key={`item-${index}`} className="flex items-center justify-between text-xs">
+                     <div className="rounded-lg border bg-popover text-popover-foreground p-2 shadow-sm min-w-[150px]">
+                       <p className="font-semibold mb-1.5 text-sm">{label}</p> {/* Day Name */}
+                       {payload.slice().reverse().map((entry, index) => (
+                         <div key={`item-${index}`} className="flex items-center justify-between text-xs py-0.5">
                            <div className="flex items-center gap-1.5">
                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
                              <span className="text-muted-foreground">{entry.name}:</span>
                            </div>
-                           <span className="font-medium">{entry.value}</span>
+                           <span className="font-semibold text-foreground/90">{entry.value}</span>
                          </div>
                        ))}
                      </div>
@@ -124,21 +125,27 @@ export function WeeklyFocusStacks({ data, projects }: WeeklyFocusStacksProps) {
                  return null;
                }}
             />
-            <Legend />
-            {/* Map through projects (which includes "Other") */}
+            <Legend
+              layout="vertical"
+              verticalAlign="middle"
+              align="right"
+              wrapperStyle={{ paddingLeft: '20px', fontSize: '12px' }}
+              iconType="circle"
+              iconSize={8}
+              formatter={(value) => <span className="text-muted-foreground font-medium">{value}</span>}
+            />
+            {/* --- Reverted Radius Logic --- */}
             {projects.map((project, index) => (
               <Bar
                 key={project.projectId}
                 dataKey={project.projectName}
-                stackId="a" // All bars belong to the same stack
-                fill={projectColorMap.get(project.projectName) || OTHER_COLOR} // Use the mapped color
-                // Apply radius only to the top segment of the stack
-                // Note: Recharts doesn't easily support radius on *top* stack dynamically.
-                // We apply it based on the *last* project in the list, which might not always be the top visually if counts vary.
-                // For perfect top radius, more complex rendering or a different library might be needed.
+                stackId="a"
+                fill={projectColorMap.get(project.projectName) || OTHER_COLOR}
+                // Apply radius only to the last Bar defined in the map (usually the visual top)
                 radius={index === projects.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
               />
             ))}
+            {/* --- End Reverted Logic --- */}
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
