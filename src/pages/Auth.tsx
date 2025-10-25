@@ -67,6 +67,7 @@ export default function Auth() {
   }, [configuredRedirect]);
 
   const hasStoredToken = Boolean(token);
+  const canStartOAuth = Boolean(clientId && clientSecret && redirectUri);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -148,21 +149,7 @@ export default function Auth() {
   }, [clientId, clientSecret, redirectUri, navigate, search, toast]);
 
   const handleTodoistLogin = () => {
-    if (!clientId) {
-      toast({
-        title: "Missing Todoist client ID",
-        description: "Add VITE_TODOIST_CLIENT_ID to your environment to start the OAuth flow.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!redirectUri) {
-      toast({
-        title: "Missing redirect URI",
-        description: "Set VITE_TODOIST_REDIRECT_URI or host DoneGlow so the OAuth redirect can complete.",
-        variant: "destructive",
-      });
+    if (!canStartOAuth || !clientId) {
       return;
     }
 
@@ -256,10 +243,17 @@ export default function Auth() {
               className="w-full"
               size="lg"
               onClick={handleTodoistLogin}
-              disabled={oauthLoading}
+              disabled={oauthLoading || !canStartOAuth}
             >
               {oauthLoading ? "Connecting..." : "Continue with Todoist"}
             </Button>
+            {!canStartOAuth && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                Configure <code className="font-mono">VITE_TODOIST_CLIENT_ID</code>,{" "}
+                <code className="font-mono">VITE_TODOIST_CLIENT_SECRET</code>, and{" "}
+                <code className="font-mono">VITE_TODOIST_REDIRECT_URI</code> in your environment to enable Todoist sign-in.
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               We redirect you to Todoist to sign in securely. After granting access, you&apos;ll return here and DoneGlow will
               load your personalized dashboard automatically.
