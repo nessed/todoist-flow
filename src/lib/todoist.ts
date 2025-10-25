@@ -68,83 +68,58 @@ export async function validateToken(token: string): Promise<boolean> {
 // --- fetchCompletedTasks function (uses fetchWithRetry) ---
 // --- UPDATED fetchCompletedTasks function with RAW ITEM LOGGING ---
 // --- fetchCompletedTasks using /completed/get_all with CURSOR PAGINATION ---
-export async function fetchCompletedTasks(token: string, since?: string /* `since` is often ignored by get_all */): Promise<TodoistTask[]> {
-  const allItems: TodoistTask[] = [];
+export async function fetchCompletedTasks(token: string, since?: string): Promise<TodoistTask[]> {
   const headers = { Authorization: `Bearer ${token}` };
-  let cursor: string | null = null;
-  let pageCount = 0;
-  const limit = 200; // Max items per page for this endpoint
+  const allItems: TodoistTask[] = [];
+  const limit = 200; // max for this endpoint
+  let offset = 0;
+  let page = 0;
 
-  console.log(`[fetchCompletedTasks] Starting fetch using /completed/get_all with limit ${limit}...`);
+  console.log(`[fetchCompletedTasks] Using offset pagination (limit=${limit})`);
 
-  do {
-    pageCount++;
-    const params = new URLSearchParams({
-      limit: limit.toString(),
-    });
-    if (cursor) {
-      params.append('cursor', cursor);
-    }
-    // Optional: Add `since` or `until` if needed, check API docs for exact behavior with get_all
-    // if (since) params.append('since', since);
+  while (true) {
+    page++;
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (since) params.append("since", since); // optional filter by completion time
 
     const url = `${TODOIST_SYNC_API}/completed/get_all?${params.toString()}`;
+    console.log(`[fetchCompletedTasks] Page ${page} (offset=${offset})...`);
 
-    console.log(`[fetchCompletedTasks] Fetching page ${pageCount}${cursor ? ` (cursor: ${cursor.substring(0, 10)}...)` : ''}...`);
+    const res = await fetchWithRetry(url, { headers });
 
-    const response = await fetchWithRetry(url, { headers });
-
-    if (response.status === 401 || response.status === 403) {
-      console.error(`[fetchCompletedTasks] Authentication error (${response.status}). Please check API token.`);
-      throw new Error(`Authentication failed (${response.status}). Is your Todoist token valid?`);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`Authentication failed (${res.status}). Check your Todoist token.`);
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch completed tasks: ${res.status} ${await res.text()}`);
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[fetchCompletedTasks] /completed/get_all request failed! Status: ${response.status}`, errorText);
-      throw new Error(`Failed to fetch completed tasks: ${response.statusText} (${response.status}) - ${errorText}`);
+    const data = await res.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    console.log(`[fetchCompletedTasks] Page ${page} received ${items.length} items`);
+
+    allItems.push(
+      ...items.map((item: any) => ({
+        id: item.task_id?.toString() ?? item.id?.toString(),
+        content: item.content ?? "",
+        completed_at: item.completed_at,
+        project_id: item.project_id?.toString() ?? "",
+        labels: item.labels ?? [],
+      }))
+    );
+
+    if (items.length < limit) {
+      console.log("[fetchCompletedTasks] Reached last page.");
+      break; // no more pages
     }
 
-    const data = await response.json();
+    offset += limit; // paginate
+  }
 
-    if (data.items && Array.isArray(data.items)) {
-       console.log(`[fetchCompletedTasks] Page ${pageCount} received ${data.items.length} raw completed items.`);
-
-       // Log the first item structure ONCE to verify format
-       if (data.items.length > 0 && pageCount === 1) {
-          console.log("[fetchCompletedTasks] Structure of the FIRST raw item from /completed/get_all:", JSON.stringify(data.items[0], null, 2));
-       }
-
-      // These items should already be completed, just map them
-      const completedItems = data.items.map((item: any) => ({
-        id: item.id?.toString() || item.task_id?.toString() || `unknown-${Math.random()}`, // task_id is common here
-        content: item.content || "",
-        completed_at: item.completed_at, // This is the key field from this endpoint
-        project_id: item.project_id ? item.project_id.toString() : "",
-        labels: item.labels || [], // Might not be present, default to empty
-      }));
-
-      allItems.push(...completedItems);
-       console.log(`[fetchCompletedTasks] Page ${pageCount} added ${completedItems.length} items. Total fetched so far: ${allItems.length}`);
-    } else {
-       console.log(`[fetchCompletedTasks] Page ${pageCount} - No 'items' array found in response.`);
-    }
-
-    // Check for the next cursor
-    cursor = data.next_cursor || null;
-    if (cursor) {
-       console.log(`[fetchCompletedTasks] Received next_cursor: ${cursor.substring(0, 10)}... Continuing fetch.`);
-       // Optional delay
-       // await new Promise(resolve => setTimeout(resolve, 100));
-    } else {
-       console.log("[fetchCompletedTasks] No next_cursor received. Fetch complete.");
-    }
-
-  } while (cursor); // Continue looping as long as there's a next_cursor
-
-  console.log(`[fetchCompletedTasks] Finished fetching all completed tasks via /completed/get_all. Total found: ${allItems.length}`);
+  console.log(`[fetchCompletedTasks] Total fetched: ${allItems.length}`);
   return allItems;
 }
+
 // --- END fetchCompletedTasks ---
 
 // *** Keep the rest of your src/lib/todoist.ts file the same ***
