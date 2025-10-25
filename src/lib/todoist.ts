@@ -1,4 +1,13 @@
-import { TodoistTask, TodoistProject, ProcessedTask, DayStats, ProjectStats, HourStats, RecapStats } from "@/types/todoist";
+import {
+  TodoistTask,
+  TodoistProject,
+  ProcessedTask,
+  DayStats,
+  ProjectStats,
+  HourStats,
+  RecapStats,
+  TodoistUserProfile,
+} from "@/types/todoist";
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
@@ -155,6 +164,56 @@ export async function fetchProjects(token: string): Promise<TodoistProject[]> {
       name: p.name || `Project ${p.id}`,
       color: p.color || "#808080",
   }));
+}
+
+
+export async function fetchUserProfile(token: string): Promise<TodoistUserProfile> {
+  const url = `${TODOIST_SYNC_API}/sync`;
+  const body = JSON.stringify({ resource_types: "[\"user\"]" });
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch user profile: ${response.statusText} (${response.status}) - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const profile = data?.user ?? {};
+
+  const rawImageId = profile.image_id ?? null;
+  let avatarUrl: string | null = null;
+
+  if (typeof profile.avatar_big === "string" && profile.avatar_big.length > 0) {
+    avatarUrl = profile.avatar_big;
+  } else if (typeof profile.avatar_medium === "string" && profile.avatar_medium.length > 0) {
+    avatarUrl = profile.avatar_medium;
+  } else if (typeof profile.avatar_url === "string" && profile.avatar_url.length > 0) {
+    avatarUrl = profile.avatar_url;
+  } else if (rawImageId) {
+    avatarUrl = `https://dcff1xvirvpb3.cloudfront.net/${rawImageId}.jpg`;
+  }
+
+  return {
+    id: profile.id?.toString?.() ?? "user",
+    full_name: profile.full_name ?? profile.name ?? "Todoist user",
+    email: profile.email ?? "",
+    avatar_url: avatarUrl,
+    image_id: rawImageId ? rawImageId.toString() : null,
+    timezone: profile.timezone ?? null,
+  };
 }
 
 
