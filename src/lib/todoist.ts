@@ -4,7 +4,7 @@ import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } fro
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
 const TODOIST_SYNC_API = "https://api.todoist.com/sync/v9";
 
-// Helper function to handle fetch requests with basic rate limit retries
+// --- Helper function MUST be defined BEFORE it's used ---
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
   try {
     const response = await fetch(url, options);
@@ -13,151 +13,189 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
       const retryAfter = response.headers.get('Retry-After');
       // Use Retry-After header if available, otherwise use default delay
       const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-      console.warn(`Rate limited. Retrying after ${waitTime / 1000} seconds... (${retries} retries left)`);
+      console.warn(`[fetchWithRetry] Rate limited. Retrying after ${waitTime / 1000} seconds... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
       // You could implement exponential backoff here (e.g., delay * 2)
       return fetchWithRetry(url, options, retries - 1, delay);
     }
-    // For other errors, you might want more specific handling
-    // if (!response.ok && retries > 0) {
-    //   console.warn(`Fetch failed with status ${response.status}. Retrying...`);
-    //    await new Promise(resolve => setTimeout(resolve, delay));
-    //    return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
-    // }
-    return response;
+     // Optional: Add basic retry for generic server errors (5xx)
+     if (!response.ok && response.status >= 500 && retries > 0) {
+       console.warn(`[fetchWithRetry] Server error (${response.status}). Retrying after ${delay / 1000} seconds... (${retries} retries left)`);
+       await new Promise(resolve => setTimeout(resolve, delay));
+       return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
+     }
+    return response; // Return response even if !ok for non-retryable errors (like 401, 403, 404)
   } catch (error) {
      // Handle network errors
     if (retries > 0) {
-      console.warn(`Network error during fetch. Retrying after ${delay / 1000} seconds... (${retries} retries left)`, error);
+      console.warn(`[fetchWithRetry] Network error during fetch. Retrying after ${delay / 1000} seconds... (${retries} retries left)`, error);
       await new Promise(resolve => setTimeout(resolve, delay));
       return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
     }
-    console.error("Fetch failed after multiple retries.", error);
+    console.error("[fetchWithRetry] Fetch failed after multiple retries.", error);
     throw error; // Re-throw the error after exhausting retries
   }
 }
+// --- End Helper function ---
 
 
 export async function validateToken(token: string): Promise<boolean> {
   try {
-    // Using fetchProjects which now includes retry logic
+    // Now uses the defined fetchWithRetry
     const response = await fetchWithRetry(`${TODOIST_API_BASE}/projects`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return response.ok;
+    // Check specifically for 401 Unauthorized or 403 Forbidden
+    if (response.status === 401 || response.status === 403) {
+        console.error(`[validateToken] Authentication failed with status: ${response.status}`);
+        return false;
+    }
+    // Consider any other non-OK status as potentially invalid for this simple check
+    if (!response.ok) {
+        console.warn(`[validateToken] Received non-OK status during validation: ${response.status}`);
+        // Depending on strictness, you might return false here or rely on subsequent fetches to fail more clearly.
+        // Let's assume !ok means potential issue for validation.
+        return false;
+    }
+    return true; // Only return true if response.ok
   } catch (error){
-    console.error("Token validation failed:", error);
+    // Network errors or exhausted retries land here
+    console.error("[validateToken] Token validation failed due to network error or repeated failures:", error);
     return false;
   }
 }
 
-// --- CORRECTED fetchCompletedTasks function ---
-export async function fetchCompletedTasks(token: string, since?: string): Promise<TodoistTask[]> {
+// --- fetchCompletedTasks function (uses fetchWithRetry) ---
+// --- UPDATED fetchCompletedTasks function with RAW ITEM LOGGING ---
+// --- fetchCompletedTasks using /completed/get_all with CURSOR PAGINATION ---
+export async function fetchCompletedTasks(token: string, since?: string /* `since` is often ignored by get_all */): Promise<TodoistTask[]> {
   const allItems: TodoistTask[] = [];
-  let syncToken: string | null = "*"; // Start with a full sync
-
   const headers = { Authorization: `Bearer ${token}` };
+  let cursor: string | null = null;
+  let pageCount = 0;
+  const limit = 200; // Max items per page for this endpoint
 
-  console.log("Starting fetchCompletedTasks using Sync API v9...");
+  console.log(`[fetchCompletedTasks] Starting fetch using /completed/get_all with limit ${limit}...`);
 
-  while (syncToken) {
-    // Construct the URL and parameters for the Sync API
+  do {
+    pageCount++;
     const params = new URLSearchParams({
-      sync_token: syncToken,
-      // Specify only 'items' resource type to fetch tasks/items
-      resource_types: '["items"]',
+      limit: limit.toString(),
     });
-    const url = `${TODOIST_SYNC_API}/sync?${params.toString()}`;
+    if (cursor) {
+      params.append('cursor', cursor);
+    }
+    // Optional: Add `since` or `until` if needed, check API docs for exact behavior with get_all
+    // if (since) params.append('since', since);
 
-    console.log(`Fetching page with sync_token: ${syncToken === "*" ? "initial (*)" : syncToken.substring(0, 10)}...`);
+    const url = `${TODOIST_SYNC_API}/completed/get_all?${params.toString()}`;
 
-    // Use the fetchWithRetry helper
+    console.log(`[fetchCompletedTasks] Fetching page ${pageCount}${cursor ? ` (cursor: ${cursor.substring(0, 10)}...)` : ''}...`);
+
     const response = await fetchWithRetry(url, { headers });
+
+    if (response.status === 401 || response.status === 403) {
+      console.error(`[fetchCompletedTasks] Authentication error (${response.status}). Please check API token.`);
+      throw new Error(`Authentication failed (${response.status}). Is your Todoist token valid?`);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Sync API request failed with status ${response.status}: ${errorText}`);
-      // Throw a more informative error
-      throw new Error(`Failed to fetch tasks via Sync API: ${response.statusText} (${response.status}) - ${errorText}`);
+      console.error(`[fetchCompletedTasks] /completed/get_all request failed! Status: ${response.status}`, errorText);
+      throw new Error(`Failed to fetch completed tasks: ${response.statusText} (${response.status}) - ${errorText}`);
     }
 
     const data = await response.json();
 
-    // The Sync API returns 'items' which are all tasks (active and completed)
-    // We need to filter for completed ones (checked: 1)
-    if (data.items) {
-       const completedItems = data.items
-        .filter((item: any) => item.checked === 1 && item.completed_at) // Filter for completed items with a completion date
-        .map((item: any) => ({
-            id: item.id.toString(), // Ensure ID is string
-            content: item.content || "", // Ensure content exists
-            completed_at: item.completed_at, // This should exist based on filter
-            project_id: item.project_id ? item.project_id.toString() : "", // Ensure project_id is string, handle null/undefined
-            labels: item.labels || [], // Ensure labels is an array
-        }));
+    if (data.items && Array.isArray(data.items)) {
+       console.log(`[fetchCompletedTasks] Page ${pageCount} received ${data.items.length} raw completed items.`);
 
-        allItems.push(...completedItems);
-        console.log(`Fetched ${completedItems.length} completed items in this batch. Total fetched so far: ${allItems.length}`);
+       // Log the first item structure ONCE to verify format
+       if (data.items.length > 0 && pageCount === 1) {
+          console.log("[fetchCompletedTasks] Structure of the FIRST raw item from /completed/get_all:", JSON.stringify(data.items[0], null, 2));
+       }
+
+      // These items should already be completed, just map them
+      const completedItems = data.items.map((item: any) => ({
+        id: item.id?.toString() || item.task_id?.toString() || `unknown-${Math.random()}`, // task_id is common here
+        content: item.content || "",
+        completed_at: item.completed_at, // This is the key field from this endpoint
+        project_id: item.project_id ? item.project_id.toString() : "",
+        labels: item.labels || [], // Might not be present, default to empty
+      }));
+
+      allItems.push(...completedItems);
+       console.log(`[fetchCompletedTasks] Page ${pageCount} added ${completedItems.length} items. Total fetched so far: ${allItems.length}`);
     } else {
-        console.log("No 'items' array found in this sync response batch.");
+       console.log(`[fetchCompletedTasks] Page ${pageCount} - No 'items' array found in response.`);
     }
 
-    // Determine the next sync_token to continue pagination
-    // Stop if it's a full_sync response (meaning everything was sent) or if no sync_token is provided
-    if (data.full_sync || !data.sync_token) {
-       console.log("Full sync indicated or no further sync_token provided. Sync process complete.");
-       syncToken = null; // Exit the loop
+    // Check for the next cursor
+    cursor = data.next_cursor || null;
+    if (cursor) {
+       console.log(`[fetchCompletedTasks] Received next_cursor: ${cursor.substring(0, 10)}... Continuing fetch.`);
+       // Optional delay
+       // await new Promise(resolve => setTimeout(resolve, 100));
     } else {
-       syncToken = data.sync_token;
-       // Optional: Log only part of the token for brevity/security
-       console.log(`Received next sync_token: ${syncToken.substring(0, 10)}... Continuing fetch.`);
+       console.log("[fetchCompletedTasks] No next_cursor received. Fetch complete.");
     }
 
-     // Optional: Add a small delay between requests if needed, especially if hitting rate limits often
-     // await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-  }
+  } while (cursor); // Continue looping as long as there's a next_cursor
 
-  console.log(`Finished fetching all completed tasks using Sync API. Total found: ${allItems.length}`);
-
-  // Note: The Sync API fetches *all* items (tasks) matching the sync criteria,
-  // including active ones if not careful. The filtering for `checked: 1` ensures we only process completed items.
-  // The `/completed/get_all` endpoint used previously is deprecated or unofficial for this purpose.
+  console.log(`[fetchCompletedTasks] Finished fetching all completed tasks via /completed/get_all. Total found: ${allItems.length}`);
   return allItems;
 }
-// --- END CORRECTED fetchCompletedTasks function ---
+// --- END fetchCompletedTasks ---
+
+// *** Keep the rest of your src/lib/todoist.ts file the same ***
+// --- END UPDATED fetchCompletedTasks function ---
+
+// *** Keep the rest of your src/lib/todoist.ts file the same ***
+// (fetchWithRetry, validateToken, fetchProjects, processTasks, calculateDayStats, etc.)
+// --- END fetchCompletedTasks function ---
 
 
 export async function fetchProjects(token: string): Promise<TodoistProject[]> {
   const url = `${TODOIST_API_BASE}/projects`;
   const headers = { Authorization: `Bearer ${token}` };
 
+  // Use the fetchWithRetry helper
   const response = await fetchWithRetry(url, { headers });
+
+   // Handle non-retryable errors like Unauthorized
+    if (response.status === 401 || response.status === 403) {
+        console.error(`[fetchProjects] Authentication error (${response.status}). Please check API token.`);
+        throw new Error(`Authentication failed (${response.status}). Is your Todoist token valid?`);
+    }
 
   if (!response.ok) {
      const errorText = await response.text();
-     console.error(`Fetch projects failed with status ${response.status}: ${errorText}`);
+     console.error(`[fetchProjects] Fetch projects failed! Status: ${response.status}`, errorText);
     throw new Error(`Failed to fetch projects: ${response.statusText} (${response.status}) - ${errorText}`);
   }
 
   const projectsData = await response.json();
-  // Map response data to ensure it matches the TodoistProject type
   return projectsData.map((p: any) => ({
-      id: p.id.toString(), // Ensure ID is string
-      name: p.name || `Project ${p.id}`, // Provide fallback name
-      color: p.color || "#808080", // Provide fallback color
+      id: p.id.toString(),
+      name: p.name || `Project ${p.id}`,
+      color: p.color || "#808080",
   }));
 }
 
 
-// --- Data Processing Functions (Added defensive checks) ---
+// --- Data Processing Functions (Keep the robust versions from previous step) ---
 
 export function processTasks(tasks: TodoistTask[]): ProcessedTask[] {
+  // Ensure tasks is an array before processing
+  if (!Array.isArray(tasks)) {
+    console.error("[processTasks] Input is not an array:", tasks);
+    return [];
+  }
   return tasks
-     .filter(task => task.completed_at) // Make sure completed_at exists
+     .filter(task => task && task.completed_at) // Add check for task itself being truthy
      .map(task => {
         try {
            const completedDate = parseISO(task.completed_at);
-           // Check if parsing resulted in a valid date
             if (isNaN(completedDate.getTime())) {
                 throw new Error('Invalid date parsed');
             }
@@ -167,11 +205,11 @@ export function processTasks(tasks: TodoistTask[]): ProcessedTask[] {
                 hour: completedDate.getHours(),
             };
         } catch (e) {
-            console.error(`Error parsing date for task ID ${task.id}: '${task.completed_at}'`, e);
-            return null; // Mark tasks with invalid dates as null
+            console.error(`[processTasks] Error parsing date for task ID ${task.id}: '${task.completed_at}'`, e);
+            return null;
         }
     })
-    .filter((task): task is ProcessedTask => task !== null); // Filter out the nulls
+    .filter((task): task is ProcessedTask => task !== null);
 }
 
 
@@ -182,45 +220,41 @@ export function calculateDayStats(
 ): DayStats[] {
   const stats = new Map<string, DayStats>();
 
-  // Input validation
   if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || isAfter(startDate, endDate)) {
-      console.error("Invalid date range provided to calculateDayStats:", startDate, endDate);
+      console.error("[calculateDayStats] Invalid date range provided:", startDate, endDate);
       return [];
   }
 
-  // Initialize all days in the range
   let currentDate = startOfDay(startDate);
-  const endOfDayEndDate = startOfDay(endDate); // Use startOfDay for comparison consistency
+  const endOfDayEndDate = startOfDay(endDate);
 
-  // Loop correctly includes the end date
   while (!isAfter(currentDate, endOfDayEndDate)) {
     const dateKey = format(currentDate, "yyyy-MM-dd");
-    if (!stats.has(dateKey)) { // Avoid overwriting if map already has the key (though unlikely here)
+    if (!stats.has(dateKey)) {
         stats.set(dateKey, { date: dateKey, count: 0, tasks: [] });
     }
-    // Increment day safely
     const nextDay = new Date(currentDate);
     nextDay.setDate(nextDay.getDate() + 1);
+    // Safety break for potential infinite loops, though less likely now
+    if (nextDay.getTime() === currentDate.getTime()) {
+        console.error("[calculateDayStats] Date increment failed, breaking loop.");
+        break;
+    }
     currentDate = nextDay;
   }
 
-  // Add tasks to their respective days
   tasks.forEach(task => {
-    // Check if completedDate is a valid Date object
-    if (task.completedDate && !isNaN(task.completedDate.getTime())) {
+    if (task && task.completedDate && !isNaN(task.completedDate.getTime())) { // Add check for task itself
         const dateKey = format(startOfDay(task.completedDate), "yyyy-MM-dd");
         const dayStat = stats.get(dateKey);
         if (dayStat) {
           dayStat.count++;
           dayStat.tasks.push(task);
         } else {
-             // Log if a task's date falls outside the initialized range (could indicate timezone issues or filtering problems upstream)
-             console.warn(`Task date ${dateKey} (Task ID: ${task.id}) is outside the expected range ${format(startDate, "yyyy-MM-dd")} to ${format(endDate, "yyyy-MM-dd")}.`);
-             // Optionally, add it anyway if needed:
-             // stats.set(dateKey, { date: dateKey, count: 1, tasks: [task] });
+             console.warn(`[calculateDayStats] Task date ${dateKey} (Task ID: ${task.id}) outside initialized range ${format(startDate, "yyyy-MM-dd")} to ${format(endDate, "yyyy-MM-dd")}.`);
         }
     } else {
-        console.warn(`Task with ID ${task.id} has an invalid or missing completedDate.`);
+        console.warn(`[calculateDayStats] Task with ID ${task?.id} has invalid/missing completedDate.`);
     }
   });
 
@@ -231,61 +265,53 @@ export function calculateProjectStats(
   tasks: ProcessedTask[],
   projects: TodoistProject[]
 ): ProjectStats[] {
-  // Ensure projects array is valid
   if (!Array.isArray(projects)) {
-      console.error("Invalid projects data provided to calculateProjectStats");
-      return [];
+      console.error("[calculateProjectStats] Invalid projects data provided.");
+      projects = []; // Default to empty
+  }
+   if (!Array.isArray(tasks)) {
+      console.error("[calculateProjectStats] Invalid tasks data provided.");
+      tasks = []; // Default to empty
   }
   const projectMap = new Map(projects.map(p => [p.id, p]));
   const stats = new Map<string, ProjectStats>();
+  const noProjectId = "no-project"; // Constant for tasks without project
 
   tasks.forEach(task => {
-    // Check if project_id exists and is valid
-    if (!task.project_id) {
-        // Handle tasks without a project ID - group them under 'No Project' or similar
-        const noProjectId = "no-project";
-        const existing = stats.get(noProjectId);
-        if (existing) {
-            existing.count++;
+    if(!task) { // Skip if task is null/undefined
+        console.warn("[calculateProjectStats] Encountered invalid task object.");
+        return;
+    }
+    let projectId = task.project_id;
+    let projectName = `Unknown/Archived (${task.project_id})`; // Default for unknown
+    let projectColor = "#808080"; // Default grey
+    let projectKey = `unknown-${task.project_id}`; // Key for unknown projects
+
+    if (!projectId) {
+        projectKey = noProjectId;
+        projectName = "No Project";
+    } else {
+        const project = projectMap.get(projectId);
+        if (project) {
+            // Found the project in the map
+            projectKey = projectId;
+            projectName = project.name || `Unnamed Project ${project.id}`;
+            projectColor = project.color || "#808080";
         } else {
-            stats.set(noProjectId, {
-                projectId: noProjectId,
-                projectName: "No Project",
-                count: 1,
-                color: "#808080", // Default grey color
-            });
+            // Project ID exists but not in the map (unknown/archived)
+             console.warn(`[calculateProjectStats] Project ID ${projectId} not found for task ${task.id}. Grouping as Unknown.`);
         }
-        return; // Skip looking up in projectMap
     }
 
-    const project = projectMap.get(task.project_id);
-    if (!project) {
-        // Handle tasks belonging to projects not in the provided list (e.g., deleted projects)
-        const unknownProjectId = `unknown-${task.project_id}`;
-         const existing = stats.get(unknownProjectId);
-        if (existing) {
-            existing.count++;
-        } else {
-             stats.set(unknownProjectId, {
-                projectId: unknownProjectId,
-                projectName: `Unknown/Archived (${task.project_id})`,
-                count: 1,
-                color: "#808080",
-            });
-        }
-        console.warn(`Project ID ${task.project_id} not found in fetched projects list for task ${task.id}.`);
-        return; // Skip normal processing
-    }
-
-    const existing = stats.get(task.project_id);
+    const existing = stats.get(projectKey);
     if (existing) {
       existing.count++;
     } else {
-      stats.set(task.project_id, {
-        projectId: task.project_id,
-        projectName: project.name || `Unnamed Project ${project.id}`, // Fallback name
+      stats.set(projectKey, {
+        projectId: projectKey, // Use the determined key
+        projectName: projectName,
         count: 1,
-        color: project.color || "#808080", // Fallback color
+        color: projectColor,
       });
     }
   });
@@ -293,21 +319,24 @@ export function calculateProjectStats(
   return Array.from(stats.values()).sort((a, b) => b.count - a.count);
 }
 
+
 export function calculateHourStats(tasks: ProcessedTask[]): HourStats[] {
+   if (!Array.isArray(tasks)) {
+      console.error("[calculateHourStats] Invalid tasks data provided.");
+      return []; // Default to empty
+  }
   const stats = new Map<number, number>();
 
-  // Initialize hours 0-23
   for (let hour = 0; hour < 24; hour++) {
     stats.set(hour, 0);
   }
 
   tasks.forEach(task => {
-     // Validate hour is a number between 0 and 23
-     if (typeof task.hour === 'number' && task.hour >= 0 && task.hour <= 23) {
-         const count = stats.get(task.hour) || 0; // Default to 0 if somehow missing
+     if (task && typeof task.hour === 'number' && task.hour >= 0 && task.hour <= 23) {
+         const count = stats.get(task.hour) || 0;
          stats.set(task.hour, count + 1);
      } else {
-         console.warn(`Task ${task.id} has invalid hour: ${task.hour}. Ignoring for hourly stats.`);
+         console.warn(`[calculateHourStats] Task ${task?.id} has invalid hour: ${task?.hour}.`);
      }
   });
 
@@ -321,26 +350,18 @@ export function calculateRecapStats(
   dayStats: DayStats[],
   projectStats: ProjectStats[]
 ): RecapStats {
-   // Ensure dayStats is an array
-   if (!Array.isArray(dayStats)) {
-        console.error("Invalid dayStats provided to calculateRecapStats");
-        dayStats = []; // Default to empty array to prevent errors
-    }
-   // Ensure projectStats is an array
-    if (!Array.isArray(projectStats)) {
-        console.error("Invalid projectStats provided to calculateRecapStats");
-        projectStats = []; // Default to empty array
-    }
+   if (!Array.isArray(dayStats)) { dayStats = []; }
+   if (!Array.isArray(projectStats)) { projectStats = []; }
 
+  const totalDone = dayStats.reduce((sum, day) => sum + (day?.count || 0), 0);
 
-  const totalDone = dayStats.reduce((sum, day) => sum + (day.count || 0), 0); // Ensure count is treated as 0 if missing
-
-  // Calculate streak robustly
+  // Calculate streak
   let currentStreak = 0;
   if (dayStats.length > 0) {
-    // Create a Map for quick date lookups
-    const dayMap = new Map(dayStats.map(d => [d.date, d.count]));
-    let currentDate = startOfDay(new Date()); // Today
+    const dayMap = new Map(dayStats.map(d => d ? [d.date, d.count] : [null, 0]).filter(entry => entry[0])); // Filter invalid entries
+    let currentDate = startOfDay(new Date());
+    const earliestDateStr = dayStats.map(d => d?.date).filter(Boolean).sort((a,b) => a!.localeCompare(b!))[0];
+    const earliestDate = earliestDateStr ? startOfDay(parseISO(earliestDateStr)) : null;
 
     while (true) {
       const dateKey = format(currentDate, "yyyy-MM-dd");
@@ -349,55 +370,52 @@ export function calculateRecapStats(
       if (count !== undefined && count > 0) {
         currentStreak++;
       } else if (count === undefined) {
-          // If the date isn't in our map, assume 0 tasks for streak purposes.
-          // Check if this date is *before* the earliest date in dayStats. If so, stop.
-          const earliestDateStr = dayStats.length > 0 ? dayStats[0].date : null; // Assumes dayStats is sorted ascending
-          if (earliestDateStr && isBefore(currentDate, startOfDay(parseISO(earliestDateStr)))) {
-              break; // Stop if we've gone past the range of our data
+          // Stop if we check before the earliest data we have
+          if(earliestDate && isBefore(currentDate, earliestDate)) {
+              break;
           }
-          // If within the range but count is undefined (or 0), streak breaks here.
-          if (currentStreak > 0) break; // Break if streak was ongoing
-          // If streak is 0 and count is undefined/0, just continue checking previous day
+          // If within range but missing (assume 0), break streak if it was ongoing
+          if (currentStreak > 0) break;
       } else { // count is 0
-          // If it's today and count is 0, the streak is potentially still valid from yesterday.
-          // If it's a past day and count is 0, the streak ends *before* this day.
+          // Break if a past day has 0 tasks
           if (format(currentDate, "yyyy-MM-dd") !== format(new Date(), "yyyy-MM-dd")) {
-            break; // Streak broken if a past day has 0 tasks
+            break;
           }
-           // If it IS today and count is 0, continue checking yesterday
+           // Allow today to have 0 without breaking streak (yet)
       }
 
       // Move to the previous day
-      currentDate.setDate(currentDate.getDate() - 1);
-
-       // Safety break: Limit how far back we check (e.g., 2 years) to prevent infinite loops with bad data
-       if (differenceInDays(new Date(), currentDate) > 730) {
-           console.warn("Streak calculation checked back over 2 years, stopping.");
+      const prevDay = new Date(currentDate);
+      prevDay.setDate(prevDay.getDate() - 1);
+       // Safety break
+       if (differenceInDays(new Date(), prevDay) > 730 || prevDay.getTime() === currentDate.getTime()) {
+           if(prevDay.getTime() === currentDate.getTime()) console.error("[calculateRecapStats] Date decrement failed.");
+           else console.warn("[calculateRecapStats] Streak calculation checked back >2 years.");
            break;
        }
+       currentDate = prevDay;
     }
   }
 
-
-  // Best day: Find day with max count
+  // Best day
   const bestDay = dayStats.reduce(
-    (best, day) => (day.count > best.count ? { date: day.date, count: day.count } : best),
-    { date: "", count: 0 } // Initial best
+    (best, day) => (day && day.count > best.count ? { date: day.date, count: day.count } : best),
+    { date: "", count: 0 }
   );
 
-  // Top project: Already sorted, take the first one if available
+  // Top project
   const topProjectStats = projectStats.length > 0 ? projectStats[0] : null;
 
   return {
     totalDone,
     currentStreak,
     bestDay: {
-        date: bestDay.date || format(new Date(), 'yyyy-MM-dd'), // Fallback date if no tasks
+        date: bestDay.date || format(new Date(), 'yyyy-MM-dd'),
         count: bestDay.count
     },
     topProject: {
-      name: topProjectStats?.projectName || "N/A", // Fallback name
-      count: topProjectStats?.count || 0 // Fallback count
+      name: topProjectStats?.projectName || "N/A",
+      count: topProjectStats?.count || 0
     },
   };
 }
