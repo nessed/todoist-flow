@@ -261,31 +261,39 @@ export function calculateDayStats(
   return Array.from(stats.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// --- UPDATED calculateProjectStats with "Other" grouping ---
 export function calculateProjectStats(
   tasks: ProcessedTask[],
-  projects: TodoistProject[]
+  projects: TodoistProject[],
+  thresholdPercent = 0.02, // Group projects representing less than 2% of total
+  minThresholdCount = 5     // Group projects with fewer than 5 tasks
 ): ProjectStats[] {
   if (!Array.isArray(projects)) {
       console.error("[calculateProjectStats] Invalid projects data provided.");
-      projects = []; // Default to empty
+      projects = [];
   }
    if (!Array.isArray(tasks)) {
       console.error("[calculateProjectStats] Invalid tasks data provided.");
-      tasks = []; // Default to empty
+      tasks = [];
   }
+
   const projectMap = new Map(projects.map(p => [p.id, p]));
   const stats = new Map<string, ProjectStats>();
-  const noProjectId = "no-project"; // Constant for tasks without project
+  const noProjectId = "no-project";
+  let totalTasks = 0; // Keep track of total tasks processed for percentage calculation
 
+  // --- First Pass: Calculate counts for all projects ---
   tasks.forEach(task => {
-    if(!task) { // Skip if task is null/undefined
+    if(!task) {
         console.warn("[calculateProjectStats] Encountered invalid task object.");
         return;
     }
+    totalTasks++; // Increment total task count
+
     let projectId = task.project_id;
-    let projectName = `Unknown/Archived (${task.project_id})`; // Default for unknown
+    let projectName = `Unknown/Archived (${task.project_id})`;
     let projectColor = "#808080"; // Default grey
-    let projectKey = `unknown-${task.project_id}`; // Key for unknown projects
+    let projectKey = `unknown-${task.project_id}`;
 
     if (!projectId) {
         projectKey = noProjectId;
@@ -293,12 +301,10 @@ export function calculateProjectStats(
     } else {
         const project = projectMap.get(projectId);
         if (project) {
-            // Found the project in the map
             projectKey = projectId;
             projectName = project.name || `Unnamed Project ${project.id}`;
             projectColor = project.color || "#808080";
         } else {
-            // Project ID exists but not in the map (unknown/archived)
              console.warn(`[calculateProjectStats] Project ID ${projectId} not found for task ${task.id}. Grouping as Unknown.`);
         }
     }
@@ -308,7 +314,7 @@ export function calculateProjectStats(
       existing.count++;
     } else {
       stats.set(projectKey, {
-        projectId: projectKey, // Use the determined key
+        projectId: projectKey,
         projectName: projectName,
         count: 1,
         color: projectColor,
@@ -316,8 +322,40 @@ export function calculateProjectStats(
     }
   });
 
-  return Array.from(stats.values()).sort((a, b) => b.count - a.count);
+  // --- Second Pass: Group small projects into "Other" ---
+  const allProjectStats = Array.from(stats.values());
+  const finalStats: ProjectStats[] = [];
+  let otherCount = 0;
+
+  // Determine the actual threshold count
+  const percentageThresholdCount = Math.floor(totalTasks * thresholdPercent);
+  const actualThreshold = Math.max(1, Math.min(minThresholdCount, percentageThresholdCount)); // Use the smaller of the two thresholds, but at least 1
+
+  console.log(`[calculateProjectStats] Total tasks: ${totalTasks}, Percentage Threshold: ${percentageThresholdCount}, Min Threshold: ${minThresholdCount}, Actual Threshold for 'Other': ${actualThreshold}`);
+
+  allProjectStats.forEach(stat => {
+    // Group if count is below threshold (and it's not the "No Project" category itself unless its count is also low)
+    if (stat.count < actualThreshold && stat.projectId !== noProjectId) {
+      otherCount += stat.count;
+    } else {
+      finalStats.push(stat); // Keep projects above threshold or the "No Project" category
+    }
+  });
+
+  // Add the "Other" category if it has any count
+  if (otherCount > 0) {
+    finalStats.push({
+      projectId: "other-projects",
+      projectName: "Other",
+      count: otherCount,
+      color: "#A0A0A0", // A neutral grey for "Other"
+    });
+  }
+
+  // Sort final list by count, descending
+  return finalStats.sort((a, b) => b.count - a.count);
 }
+// --- END UPDATED calculateProjectStats ---
 
 
 export function calculateHourStats(tasks: ProcessedTask[]): HourStats[] {

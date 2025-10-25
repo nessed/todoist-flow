@@ -11,10 +11,21 @@ interface CompletionHeatmapProps {
 export function CompletionHeatmap({ data, onDayClick }: CompletionHeatmapProps) {
   const maxCount = Math.max(...data.map(d => d.count), 1);
 
-  const getIntensity = (count: number) => {
-    if (count === 0) return "bg-muted";
-    const intensity = Math.ceil((count / maxCount) * 4);
-    return `bg-primary/${intensity * 20}`;
+  const getIntensity = (count: number): string => {
+    if (count === 0) return "bg-muted hover:bg-muted/80"; // Add hover state for muted
+
+    // Calculate intensity level (1 to 5)
+    const level = Math.min(Math.ceil((count / maxCount) * 5), 5);
+
+    // Map level to specific Tailwind classes with opacity
+    switch (level) {
+      case 1: return "bg-primary/20 hover:bg-primary/30"; // Weakest intensity
+      case 2: return "bg-primary/40 hover:bg-primary/50";
+      case 3: return "bg-primary/60 hover:bg-primary/70";
+      case 4: return "bg-primary/80 hover:bg-primary/90";
+      case 5: return "bg-primary hover:bg-primary/90";    // Strongest intensity (full color)
+      default: return "bg-muted hover:bg-muted/80"; // Fallback, same as 0 count
+    }
   };
 
   return (
