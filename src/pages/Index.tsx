@@ -425,16 +425,6 @@ export default function Index() {
     [totalActionable],
   );
 
-  const userFirstName = useMemo(() => {
-    if (userProfile?.full_name) {
-      return userProfile.full_name.trim().split(/\s+/)[0];
-    }
-    if (useSampleData) {
-      return "Explorer";
-    }
-    return null;
-  }, [userProfile?.full_name, useSampleData]);
-
   const planColumnMeta = useMemo(
     () => {
       const owner = userFirstName ?? "You";
@@ -444,7 +434,7 @@ export default function Index() {
           title: "Catch up",
           description: `${owner} can clear these first`,
           gradient: "from-destructive/25 via-destructive/10 to-transparent",
-          emptyState: "No overdue tasks - momentum secured!",
+          emptyState: "No overdue tasks — momentum secured!",
         },
         {
           key: "today" as const,
@@ -458,7 +448,7 @@ export default function Index() {
           title: "Next up",
           description: "Lock in your next wins",
           gradient: "from-emerald-300/20 via-emerald-200/10 to-transparent",
-          emptyState: "You're ahead for the week.",
+          emptyState: "You’re ahead for the week.",
         },
         {
           key: "unscheduled" as const,
@@ -501,6 +491,16 @@ export default function Index() {
     }
     return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
   }, [userProfile, useSampleData]);
+
+  const userFirstName = useMemo(() => {
+    if (userProfile?.full_name) {
+      return userProfile.full_name.trim().split(/\s+/)[0];
+    }
+    if (useSampleData) {
+      return "Explorer";
+    }
+    return null;
+  }, [userProfile?.full_name, useSampleData]);
 
   const formattedRangeLabel = useMemo(() => {
     if (
@@ -858,31 +858,34 @@ export default function Index() {
             </aside>
           </section>
 
-          <section className="rounded-[2.5rem] border border-white/10 bg-background/90 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Action plan</h2>
-                <p className="text-sm text-muted-foreground">
-                  {totalActionable > 0
-                    ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
-                    : "We couldn’t find any active tasks with due dates. Add a few in Todoist to activate the planner."}
-                </p>
+          <section className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,hsla(var(--primary),0.16),transparent_70%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,hsla(var(--accent),0.12),transparent_68%)]" />
+            <div className="relative">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Action plan</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {totalActionable > 0
+                      ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
+                      : "We couldn’t find any active tasks with due dates. Add a few in Todoist to activate the planner."}
+                  </p>
+                </div>
+                <Badge
+                  variant="secondary"
+                  className="w-fit rounded-full border border-primary/30 bg-primary/10 text-xs uppercase tracking-[0.28em] text-primary"
+                >
+                  Live Todoist sync
+                </Badge>
               </div>
-              <Badge
-                variant="secondary"
-                className="w-fit rounded-full border border-primary/30 bg-primary/10 text-xs uppercase tracking-[0.28em] text-primary"
-              >
-                Live Todoist sync
-              </Badge>
-            </div>
-            <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-              {planColumnMeta.map((column) => {
-                const bucket = actionPlan[column.key];
-                return (
-                  <div
-                    key={column.key}
-                    className="relative overflow-hidden rounded-3xl border border-white/10 bg-background/85 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]"
-                  >
+              <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                {planColumnMeta.map((column) => {
+                  const bucket = actionPlan[column.key];
+                  return (
+                    <div
+                      key={column.key}
+                      className="relative overflow-hidden rounded-3xl border border-white/10 bg-background/85 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]"
+                    >
                     <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${column.gradient}`} />
                     <div className="relative space-y-4">
                       <div>
@@ -942,79 +945,100 @@ export default function Index() {
                 );
               })}
             </div>
+          </div>
           </section>
 
-          <section className="rounded-[2.5rem] border border-white/10 bg-background/85 p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Plan your focus</h2>
-                <p className="text-sm text-muted-foreground">
-                  Adjust the range to surface the trends that matter most.
-                </p>
+          <section className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,hsla(var(--primary),0.16),transparent_65%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,hsla(var(--accent),0.14),transparent_70%)]" />
+            <div className="relative">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Plan your focus</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Adjust the range to surface the trends that matter most.
+                  </p>
+                </div>
+                <div className="max-w-xl lg:w-auto">
+                  <h2 id="filters-heading" className="sr-only">
+                    Date Range Filters
+                  </h2>
+                  <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+                </div>
               </div>
-              <div className="max-w-xl lg:w-auto">
-                <h2 id="filters-heading" className="sr-only">
-                  Date Range Filters
+              <div className="mt-8">
+                <h2 id="recap-heading" className="sr-only">
+                  Summary Statistics
                 </h2>
-                <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+                <RecapCards stats={recapStats} />
               </div>
-            </div>
-            <div className="mt-8">
-              <h2 id="recap-heading" className="sr-only">
-                Summary Statistics
-              </h2>
-              <RecapCards stats={recapStats} />
             </div>
           </section>
 
           <section className="space-y-8">
-            <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-foreground">Completion heatmap</h2>
-                <p className="text-sm text-muted-foreground">
-                  Spot streaks and quieter days at a glance.
-                </p>
-              </div>
-              <div className="-mx-4 sm:mx-0">
-                <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+            <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsla(var(--primary),0.18),transparent_65%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsla(var(--background),0.95)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
+              <div className="relative">
+                <div className="mb-6">
+                  <h2 className="text-lg font-semibold text-foreground">Completion heatmap</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Spot streaks and quieter days at a glance.
+                  </p>
+                </div>
+                <div className="-mx-4 sm:mx-0">
+                  <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+                </div>
               </div>
             </div>
 
             <div className="grid gap-8 lg:grid-cols-2">
               {dayStats.length > 0 && projectStats.length > 0 && (
-                <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold text-foreground">Weekly focus stacks</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Understand how your attention shifts as weeks progress.
-                    </p>
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsla(var(--accent),0.18),transparent_65%)]" />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,hsla(var(--background),0.96)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
+                  <div className="relative">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold text-foreground">Weekly focus stacks</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Understand how your attention shifts as weeks progress.
+                      </p>
+                    </div>
+                    <WeeklyFocusStacks data={dayStats} projects={projectStats} />
                   </div>
-                  <WeeklyFocusStacks data={dayStats} projects={projectStats} />
                 </div>
               )}
 
               {projectStats.length > 0 && (
-                <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold text-foreground">Project share</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Reveal which initiatives receive the most energy.
-                    </p>
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,hsla(var(--secondary),0.2),transparent_70%)]" />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(165deg,hsla(var(--background),0.96)_0%,hsla(var(--background),0.86)_100%)] opacity-75" />
+                  <div className="relative">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold text-foreground">Project share</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Reveal which initiatives receive the most energy.
+                      </p>
+                    </div>
+                    <ProjectShareDonut data={projectStats} />
                   </div>
-                  <ProjectShareDonut data={projectStats} />
                 </div>
               )}
             </div>
 
             {hourStats.length > 0 && (
-              <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-foreground">Time-of-day rhythm</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Understand when your completions peak.
-                  </p>
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,hsla(var(--primary),0.15),transparent_70%)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(200deg,hsla(var(--background),0.96)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
+                <div className="relative">
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-foreground">Time-of-day rhythm</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Understand when your completions peak.
+                    </p>
+                  </div>
+                  <TimeOfDayRhythm data={hourStats} />
                 </div>
-                <TimeOfDayRhythm data={hourStats} />
               </div>
             )}
           </section>
@@ -1044,7 +1068,20 @@ export default function Index() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-30 bg-[linear-gradient(135deg,hsla(var(--background),1)_0%,hsla(var(--background),0.94)_40%,hsla(var(--background),1)_100%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-20 opacity-40 [background-image:radial-gradient(1px_1px_at_1px_1px,hsla(var(--foreground),0.08),transparent)] [background-size:46px_46px]"
+      />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -left-32 h-[480px] w-[480px] animate-orb-drift rounded-full bg-[radial-gradient(circle,hsla(var(--primary),0.28),transparent_65%)] blur-3xl" />
+        <div className="absolute top-1/3 -right-40 h-[520px] w-[520px] animate-[orb-drift_28s_ease-in-out_infinite_reverse] rounded-full bg-[radial-gradient(circle,hsla(var(--secondary),0.2),transparent_65%)] blur-3xl" />
+        <div className="absolute bottom-[-200px] left-1/2 h-[640px] w-[640px] -translate-x-1/2 animate-[orb-drift_32s_ease-in-out_infinite] rounded-full bg-[radial-gradient(circle,hsla(var(--accent),0.22),transparent_70%)] blur-3xl" />
+      </div>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 lg:px-8">
@@ -1152,6 +1189,8 @@ export default function Index() {
       {/* Main Content */}
       <main className="relative pb-16 pt-10">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] -z-10 bg-gradient-to-b from-primary/15 via-background/95 to-background" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-[-160px] h-[520px] -z-10 bg-[radial-gradient(circle_at_bottom,hsla(var(--secondary),0.18),transparent_68%)]" />
+        <div className="pointer-events-none absolute inset-0 -z-20 opacity-30 [background-image:linear-gradient(180deg,transparent_0,hsla(var(--primary),0.08)_28%,transparent_65%)]" />
         <div className="mx-auto max-w-7xl space-y-12 px-4 lg:px-8">
           {renderContent()}
         </div>
@@ -1167,7 +1206,7 @@ export default function Index() {
       {/* Footer */}
       <footer className="mt-16 bg-background/95">
         <div className="mx-auto max-w-7xl border-t border-white/5 px-4 py-8 text-center text-xs text-muted-foreground lg:px-8">
-          DoneGlow - Visualizing your Todoist progress.
+          DoneGlow · Visualizing your Todoist progress.
           {useSampleData && (
             <Badge
               variant="outline"
