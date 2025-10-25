@@ -9,7 +9,17 @@ import { TimeOfDayRhythm } from "@/components/TimeOfDayRhythm";
 import { Filters } from "@/components/Filters";
 import { TaskDrilldown } from "@/components/TaskDrilldown";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, LogOut, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  CheckCircle2,
+  Download,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  Share2,
+  Sparkles,
+  ArrowUpRight,
+} from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { DayStats, TodoistTask, TodoistProject } from "@/types/todoist";
 import { generateMockTasks, generateMockProjects } from "@/lib/mockData";
@@ -22,9 +32,8 @@ import {
   calculateHourStats,
   calculateRecapStats,
 } from "@/lib/todoist";
-import { subDays, startOfDay, isAfter, isBefore, format } from "date-fns";
+import { subDays, startOfDay, isAfter, isBefore, format, setHours } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator"; // Import Separator
 
 export default function Index() {
   const navigate = useNavigate();
@@ -166,6 +175,136 @@ export default function Index() {
     [dayStats, projectStats]
   );
 
+  const numberFormatter = useMemo(() => new Intl.NumberFormat("en-US"), []);
+
+  const formattedRangeLabel = useMemo(() => {
+    if (
+      !dateRange?.from ||
+      !dateRange?.to ||
+      isNaN(dateRange.from.getTime()) ||
+      isNaN(dateRange.to.getTime())
+    ) {
+      return "Last 30 days";
+    }
+
+    const sameYear =
+      dateRange.from.getFullYear() === dateRange.to.getFullYear();
+
+    return sameYear
+      ? `${format(dateRange.from, "MMM d")} – ${format(
+          dateRange.to,
+          "MMM d",
+        )}`
+      : `${format(dateRange.from, "MMM d, yyyy")} – ${format(
+          dateRange.to,
+          "MMM d, yyyy",
+        )}`;
+  }, [dateRange]);
+
+  const activeProjects = useMemo(
+    () => projectStats.filter((project) => project.count > 0).length,
+    [projectStats],
+  );
+
+  const topHour = useMemo(() => {
+    if (!hourStats.length) {
+      return null;
+    }
+
+    return hourStats.reduce((prev, current) =>
+      current.count > prev.count ? current : prev,
+    );
+  }, [hourStats]);
+
+  const topHourLabel = useMemo(() => {
+    if (!topHour) {
+      return "—";
+    }
+
+    const base = setHours(startOfDay(new Date()), topHour.hour);
+    return format(base, "h a");
+  }, [topHour]);
+
+  const heroHighlights = useMemo(
+    () => [
+      {
+        label: "Tasks captured",
+        value: numberFormatter.format(filteredTasks.length),
+        description: formattedRangeLabel,
+      },
+      {
+        label: "Active projects",
+        value: numberFormatter.format(activeProjects),
+        description: "Contributing completions",
+      },
+      {
+        label: "Peak energy",
+        value: topHourLabel,
+        description: hourStats.length
+          ? "Most productive hour"
+          : "No completions recorded",
+      },
+    ],
+    [
+      activeProjects,
+      filteredTasks,
+      formattedRangeLabel,
+      hourStats.length,
+      numberFormatter,
+      topHourLabel,
+    ],
+  );
+
+  const focusTip = useMemo(
+    () =>
+      topHourLabel === "—"
+        ? "Identify your most energetic hour and block it on the calendar."
+        : `Protect your ${topHourLabel.toLowerCase()} slot for deep work today.`,
+    [topHourLabel],
+  );
+
+  const hasStoredToken =
+    typeof window !== "undefined" &&
+    Boolean(localStorage.getItem("todoist_token"));
+
+  const handleExportSnapshot = () => {
+    if (typeof window !== "undefined") {
+      window.print();
+    }
+  };
+
+  const handleShareHighlight = () => {
+    const summary = `DoneGlow snapshot · ${numberFormatter.format(
+      filteredTasks.length,
+    )} tasks completed ${formattedRangeLabel}.`;
+
+    if (typeof navigator !== "undefined") {
+      if (navigator.share) {
+        navigator
+          .share({
+            title: "DoneGlow snapshot",
+            text: summary,
+            url: typeof window !== "undefined" ? window.location.href : undefined,
+          })
+          .catch((err) => console.debug("Share cancelled", err));
+        return;
+      }
+
+      if (navigator.clipboard) {
+        navigator.clipboard
+          .writeText(
+            `${summary}${
+              typeof window !== "undefined" ? `\n${window.location.href}` : ""
+            }`,
+          )
+          .catch((err) => console.debug("Clipboard unavailable", err));
+        return;
+      }
+    }
+
+    console.debug("Share APIs unavailable");
+  };
+
    const triggerFetchData = () => {
        setUseSampleData(false);
        setRefreshTick((n) => n + 1);
@@ -175,20 +314,29 @@ export default function Index() {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <span className="ml-3 text-lg">Loading your achievements...</span>
+        <div
+          className="flex min-h-[360px] flex-col items-center justify-center rounded-[2.5rem] border border-white/10 bg-background/80 p-16 text-center shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <span className="mt-6 text-lg font-medium text-muted-foreground">
+            Loading your achievements...
+          </span>
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className="space-y-6 max-w-xl mx-auto text-center py-10" aria-live="polite">
-          <Alert variant="destructive">
+        <div
+          className="mx-auto max-w-2xl rounded-[2.5rem] border border-destructive/30 bg-background/85 p-12 text-center shadow-[0_28px_70px_-40px_rgba(190,18,60,0.45)]"
+          aria-live="polite"
+        >
+          <Alert variant="destructive" className="border-0 bg-transparent text-left">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-          <div className="flex gap-4 justify-center">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Button onClick={triggerFetchData} variant="default">
               Retry Fetching Data
             </Button>
@@ -203,13 +351,13 @@ export default function Index() {
     // Check if projects are loaded but tasks are empty *after* successful fetch
     if (!useSampleData && projects.length > 0 && tasks.length === 0) {
       return (
-        <div className="space-y-6 max-w-xl mx-auto text-center py-10">
-          <Alert>
+        <div className="mx-auto max-w-2xl rounded-[2.5rem] border border-white/10 bg-background/85 p-12 text-center shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+          <Alert className="border-0 bg-transparent text-left text-foreground">
             <AlertDescription>
               Successfully connected to Todoist, but no completed tasks were found in your history. Complete some tasks and refresh!
             </AlertDescription>
           </Alert>
-          <Button onClick={() => setUseSampleData(true)} variant="outline">
+          <Button onClick={() => setUseSampleData(true)} variant="outline" className="mt-8">
             View Sample Data
           </Button>
         </div>
@@ -219,77 +367,230 @@ export default function Index() {
     // Check if there's data to display (either real or sample)
     if (tasks.length > 0 && projects.length > 0) {
       return (
-        <>
-          {/* Filters - Moved inside conditional rendering */}
-          <section aria-labelledby="filters-heading" className="mb-8">
-             <h2 id="filters-heading" className="sr-only">Date Range Filters</h2>
-             <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+        <div className="space-y-12">
+          <section className="grid gap-6 xl:grid-cols-[2.35fr,1fr]">
+            <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-primary/12 via-background/95 to-background p-10 shadow-[0_32px_70px_-30px_rgba(15,23,42,0.6)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_65%)]" />
+              <div className="relative flex flex-col gap-8">
+                <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <Badge
+                      variant="secondary"
+                      className="w-fit rounded-full border border-primary/30 bg-primary/15 text-primary"
+                    >
+                      <Sparkles className="mr-1 h-3 w-3" />
+                      Desktop spotlight
+                    </Badge>
+                    <h2 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                      Command your Todoist momentum
+                    </h2>
+                    <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
+                      Elevate the desktop view with richer context, deeper insights, and quick actions designed for power users.
+                    </p>
+                    {useSampleData && (
+                      <Badge
+                        variant="outline"
+                        className="mt-4 w-fit rounded-full border border-primary/40 text-primary"
+                      >
+                        Viewing sample insights
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center xl:flex-col xl:items-end">
+                    <Button
+                      variant="secondary"
+                      onClick={triggerFetchData}
+                      className="w-full gap-2 rounded-full sm:w-auto"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Refresh insights
+                    </Button>
+                    <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+                      <Button
+                        variant="outline"
+                        onClick={handleExportSnapshot}
+                        className="flex-1 gap-2 rounded-full border-white/30 bg-background/80 sm:flex-none"
+                      >
+                        <Download className="h-4 w-4" />
+                        Export snapshot
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleShareHighlight}
+                        className="flex-1 gap-2 rounded-full border-white/30 bg-background/80 sm:flex-none"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        Share highlight
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {heroHighlights.map((highlight) => (
+                    <div
+                      key={highlight.label}
+                      className="rounded-2xl border border-white/10 bg-background/85 p-4 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                    >
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground/70">
+                        {highlight.label}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {highlight.value}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground/70">
+                        {highlight.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <aside className="hidden flex-col gap-6 rounded-[2.5rem] border border-white/10 bg-background/75 p-8 shadow-[0_28px_60px_-40px_rgba(15,23,42,0.6)] xl:flex">
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span className="inline-flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Focus pulse
+                </span>
+                <ArrowUpRight className="h-4 w-4 text-muted-foreground/60" />
+              </div>
+              <div className="space-y-5 text-sm text-muted-foreground">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground/70">
+                    Current streak
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {recapStats.currentStreak} days
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground/70">
+                    Top project
+                  </p>
+                  <p className="mt-1 text-base font-medium text-foreground">
+                    {recapStats.topProject.name || "No standout yet"}
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    {numberFormatter.format(recapStats.topProject.count)} tasks
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-3xl bg-primary/10 p-5 text-sm text-primary">
+                {focusTip}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground/70">
+                  Saved filters
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {["Deep work window", "Inbox zero sprint", "Admin blast"].map((filter) => (
+                    <Badge
+                      key={filter}
+                      variant="outline"
+                      className="rounded-full border-white/20 bg-background/80 px-3 py-1 text-xs text-muted-foreground"
+                    >
+                      {filter}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </aside>
           </section>
 
-          {/* Recap Section */}
-          <section aria-labelledby="recap-heading" className="mb-10">
-            <h2 id="recap-heading" className="sr-only">Summary Statistics</h2>
-            <RecapCards stats={recapStats} />
+          <section className="rounded-[2.5rem] border border-white/10 bg-background/85 p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Plan your focus</h2>
+                <p className="text-sm text-muted-foreground">
+                  Adjust the range to surface the trends that matter most.
+                </p>
+              </div>
+              <div className="max-w-xl lg:w-auto">
+                <h2 id="filters-heading" className="sr-only">
+                  Date Range Filters
+                </h2>
+                <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+              </div>
+            </div>
+            <div className="mt-8">
+              <h2 id="recap-heading" className="sr-only">
+                Summary Statistics
+              </h2>
+              <RecapCards stats={recapStats} />
+            </div>
           </section>
 
-          <Separator className="my-10" />
+          <section className="space-y-8">
+            <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-foreground">Completion heatmap</h2>
+                <p className="text-sm text-muted-foreground">
+                  Spot streaks and quieter days at a glance.
+                </p>
+              </div>
+              <div className="-mx-4 sm:mx-0">
+                <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+              </div>
+            </div>
 
-          {/* Main Dashboard Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Heatmap (Spans 2 cols on md+) */}
-            <section aria-labelledby="heatmap-heading" className="md:col-span-2">
-              <h2 id="heatmap-heading" className="sr-only">Completion Heatmap</h2>
-              <CompletionHeatmap
-                data={dayStats}
-                onDayClick={handleDayClick}
-              />
-            </section>
-
-            {/* Weekly Focus */}
-            {dayStats.length > 0 && projectStats.length > 0 && (
-                <section aria-labelledby="weekly-focus-heading">
-                  <h2 id="weekly-focus-heading" className="sr-only">Weekly Focus</h2>
+            <div className="grid gap-8 lg:grid-cols-2">
+              {dayStats.length > 0 && projectStats.length > 0 && (
+                <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-foreground">Weekly focus stacks</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Understand how your attention shifts as weeks progress.
+                    </p>
+                  </div>
                   <WeeklyFocusStacks data={dayStats} projects={projectStats} />
-                </section>
-            )}
+                </div>
+              )}
 
-            {/* Project Share */}
-            {projectStats.length > 0 && (
-                 <section aria-labelledby="project-share-heading">
-                  <h2 id="project-share-heading" className="sr-only">Project Share</h2>
+              {projectStats.length > 0 && (
+                <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-foreground">Project share</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Reveal which initiatives receive the most energy.
+                    </p>
+                  </div>
                   <ProjectShareDonut data={projectStats} />
-                </section>
-            )}
+                </div>
+              )}
+            </div>
 
-            {/* Time of Day (Spans 2 cols on md+) */}
-             {hourStats.length > 0 && (
-                <section aria-labelledby="time-rhythm-heading" className="md:col-span-2">
-                  <h2 id="time-rhythm-heading" className="sr-only">Time of Day Rhythm</h2>
-                  <TimeOfDayRhythm data={hourStats} />
-                </section>
-             )}
-          </div>
-        </>
+            {hourStats.length > 0 && (
+              <div className="rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+                <div className="mb-6">
+                  <h2 className="text-lg font-semibold text-foreground">Time-of-day rhythm</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Understand when your completions peak.
+                  </p>
+                </div>
+                <TimeOfDayRhythm data={hourStats} />
+              </div>
+            )}
+          </section>
+        </div>
       );
     }
 
      // Fallback for unexpected states (e.g., loading finished but no data set somehow)
      return (
-         <div className="space-y-6 max-w-xl mx-auto text-center py-10">
-            <Alert>
-               <AlertDescription>
-                 Loading completed or data is unavailable in the expected format. Please try again.
-               </AlertDescription>
-            </Alert>
-             <div className="flex gap-4 justify-center">
-                 <Button onClick={triggerFetchData} variant="default">
-                   Retry Fetching Data
-                 </Button>
-                 <Button onClick={() => setUseSampleData(true)} variant="outline">
-                   Use Sample Data
-                 </Button>
-             </div>
-         </div>
+        <div className="mx-auto max-w-2xl rounded-[2.5rem] border border-white/10 bg-background/85 p-12 text-center shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
+          <Alert className="border-0 bg-transparent text-left text-foreground">
+            <AlertDescription>
+              Loading completed or data is unavailable in the expected format. Please try again.
+            </AlertDescription>
+          </Alert>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <Button onClick={triggerFetchData} variant="default">
+              Retry Fetching Data
+            </Button>
+            <Button onClick={() => setUseSampleData(true)} variant="outline">
+              Use Sample Data
+            </Button>
+          </div>
+        </div>
      );
   };
 
@@ -297,43 +598,83 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4"> {/* Adjusted padding */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-glow rounded-lg flex items-center justify-center shadow-md shadow-primary/20">
-                <CheckCircle2 className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight"> {/* Adjusted size */}
-                  DoneGlow
-                </h1>
-                <p className="text-xs text-muted-foreground hidden sm:block"> {/* Hide on small screens */}
-                  Todoist completion insights
-                </p>
-              </div>
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 lg:px-8">
+          <div className="relative flex items-center gap-4">
+            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary/50 via-primary/25 to-primary/60 shadow-[0_18px_30px_-18px_rgba(14,116,144,0.65)]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--primary)_0%,transparent_70%)] opacity-70" />
+              <CheckCircle2 className="relative h-5 w-5 text-primary-foreground drop-shadow-sm" />
             </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              {(!useSampleData && localStorage.getItem("todoist_token")) && ( // Show logout only if logged in
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleLogout}
-                  aria-label="Logout"
-                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                DoneGlow
+              </h1>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground/70">
+                <Badge
+                  variant="secondary"
+                  className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 text-primary"
                 >
-                  <LogOut className="h-5 w-5" />
-                </Button>
-              )}
+                  <Sparkles className="h-3 w-3" />
+                  Desktop insights
+                </Badge>
+                <span className="hidden sm:inline">
+                  Todoist completion intelligence
+                </span>
+              </div>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-background/80 px-3 py-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)] md:flex">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={triggerFetchData}
+                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                aria-label="Refresh insights"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleExportSnapshot}
+                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                aria-label="Export snapshot"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleShareHighlight}
+                className="h-8 w-8 rounded-full border border-white/10 text-muted-foreground transition-colors hover:text-primary"
+                aria-label="Share highlight"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </div>
+            <ThemeToggle />
+            {(!useSampleData && hasStoredToken) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8"> {/* Adjusted padding */}
-        {renderContent()}
+      <main className="relative pb-16 pt-10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] -z-10 bg-gradient-to-b from-primary/15 via-background/95 to-background" />
+        <div className="mx-auto max-w-7xl space-y-12 px-4 lg:px-8">
+          {renderContent()}
+        </div>
       </main>
 
       {/* Task Drilldown Dialog */}
@@ -343,11 +684,20 @@ export default function Index() {
         onOpenChange={setDrilldownOpen}
       />
 
-      {/* Footer (Optional) */}
-       <footer className="container mx-auto px-4 py-6 mt-12 border-t text-center text-xs text-muted-foreground">
-          DoneGlow - Visualizing your Todoist progress.
-          {useSampleData && <span className="ml-2 px-2 py-0.5 bg-muted rounded"> (Sample Data)</span>}
-       </footer>
+      {/* Footer */}
+      <footer className="mt-16 bg-background/95">
+        <div className="mx-auto max-w-7xl border-t border-white/5 px-4 py-8 text-center text-xs text-muted-foreground lg:px-8">
+          DoneGlow · Visualizing your Todoist progress.
+          {useSampleData && (
+            <Badge
+              variant="outline"
+              className="ml-3 inline-flex items-center rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-primary"
+            >
+              Sample data
+            </Badge>
+          )}
+        </div>
+      </footer>
     </div>
   );
 }
