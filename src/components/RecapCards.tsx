@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecapStats } from "@/types/todoist";
 import { Trophy, Flame, TrendingUp, Target } from "lucide-react";
@@ -18,29 +19,43 @@ export function RecapCards({ stats }: RecapCardsProps) {
   const cards = [
     {
       title: "Total Done",
-      value: stats.totalDone,
+      metric: stats.totalDone,
+      goal: 120,
+      display: stats.totalDone.toLocaleString(),
+      helper: "Completed in this window",
       icon: Target,
-      color: "text-chart-1",
+      conicColor: "var(--chart-1, var(--primary))",
+      glow: "from-chart-1/35 via-transparent to-transparent",
     },
     {
       title: "Current Streak",
-      value: `${stats.currentStreak} days`,
+      metric: stats.currentStreak,
+      goal: 21,
+      display: `${stats.currentStreak} days`,
+      helper: "Daily completion run",
       icon: Flame,
-      color: "text-chart-2",
+      conicColor: "var(--chart-2, var(--primary))",
+      glow: "from-chart-2/35 via-transparent to-transparent",
     },
     {
       title: "Best Day",
-      value: stats.bestDay.count,
-      subtitle: bestDayDateFormatted, // Use validated date
+      metric: stats.bestDay.count,
+      goal: 30,
+      display: stats.bestDay.count.toLocaleString(),
+      helper: `On ${bestDayDateFormatted}`,
       icon: Trophy,
-      color: "text-chart-3",
+      conicColor: "var(--chart-3, var(--primary))",
+      glow: "from-chart-3/35 via-transparent to-transparent",
     },
     {
       title: "Top Project",
-      value: stats.topProject.count,
-      subtitle: stats.topProject.name || "N/A", // Ensure subtitle exists
+      metric: stats.topProject.count,
+      goal: 60,
+      display: stats.topProject.count.toLocaleString(),
+      helper: stats.topProject.name || "No standout yet",
       icon: TrendingUp,
-      color: "text-chart-4",
+      conicColor: "var(--chart-4, var(--primary))",
+      glow: "from-chart-4/35 via-transparent to-transparent",
     },
   ];
 
@@ -49,37 +64,58 @@ export function RecapCards({ stats }: RecapCardsProps) {
       {cards.map((card, index) => (
         <Card
           key={card.title}
-          className="relative overflow-hidden group animate-card-in border bg-card shadow-card hover:shadow-card-hover transition-all duration-300"
-          // --- Add animation delay ---
-          style={{ animationDelay: `${index * 100}ms` }}
-          // --- End delay ---
+          className="relative overflow-hidden group animate-card-in border border-white/5 bg-background/80 backdrop-blur-xl shadow-[0_20px_45px_-22px_rgba(15,23,42,0.55)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_32px_60px_-30px_rgba(15,23,42,0.65)]"
+          style={{ animationDelay: `${index * 90}ms` }}
         >
-          {/* Optional: subtle background pattern or gradient */}
-          {/* <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-30 transition-opacity duration-300" /> */}
+          <div
+            className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${card.glow} opacity-0 transition-opacity duration-500 group-hover:opacity-80`}
+          />
+          <div className="pointer-events-none absolute -top-10 -right-16 h-32 w-32 rounded-full bg-primary/15 blur-3xl" />
 
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10">
-            {" "}
-            {/* Adjusted padding */}
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {card.title}
-            </CardTitle>
-            {/* Icon treatment */}
-            <div
-              className={`p-2 rounded-lg bg-gradient-to-br from-muted to-background border shadow-inner`}
-            >
-              <card.icon className={`h-4 w-4 ${card.color}`} />
+          <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-1">
+            <div>
+              <CardTitle className="text-sm font-semibold text-muted-foreground">
+                {card.title}
+              </CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground/70">{card.helper}</p>
+            </div>
+            <div className="relative h-12 w-12">
+              {(() => {
+                const progress = Math.min(
+                  card.metric > 0 && card.goal > 0
+                    ? card.metric / card.goal
+                    : 0,
+                  0.95
+                );
+                const conicStyle: CSSProperties = {
+                  background: `conic-gradient(${card.conicColor} ${Math.max(
+                    progress,
+                    0.12
+                  ) * 360}deg, transparent ${Math.max(progress, 0.12) * 360}deg)`,
+                };
+
+                return (
+                  <>
+                    <div className="absolute inset-0 rounded-full bg-muted/30" />
+                    <div
+                      className="absolute inset-[2px] rounded-full opacity-90"
+                      style={conicStyle}
+                    />
+                    <div className="absolute inset-[5px] flex items-center justify-center rounded-full border border-white/10 bg-background/90 shadow-inner">
+                      <card.icon className="h-4 w-4 text-foreground" />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            {/* Value styling */}
-            <div className="text-2xl font-bold text-foreground">
-              {card.value}
+            <div className="text-3xl font-semibold tracking-tight text-foreground">
+              {card.display}
             </div>
-            {card.subtitle && (
-              <p className="text-xs text-muted-foreground pt-1">
-                {card.subtitle}
-              </p>
-            )}
+            <p className="pt-2 text-xs uppercase tracking-[0.28em] text-muted-foreground/70">
+              Momentum
+            </p>
           </CardContent>
         </Card>
       ))}

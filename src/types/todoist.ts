@@ -6,6 +6,23 @@ export interface TodoistTask {
   labels: string[];
 }
 
+export interface TodoistDueInfo {
+  date: string | null;
+  datetime: string | null;
+  timezone: string | null;
+}
+
+export interface TodoistActiveTask {
+  id: string;
+  content: string;
+  project_id: string;
+  labels: string[];
+  priority: number;
+  due: TodoistDueInfo | null;
+  section_id?: string | null;
+  url?: string;
+}
+
 export interface TodoistProject {
   id: string;
   name: string;
@@ -40,4 +57,13 @@ export interface RecapStats {
   currentStreak: number;
   bestDay: { date: string; count: number };
   topProject: { name: string; count: number };
+}
+
+export interface TodoistUserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url?: string | null;
+  image_id?: string | null;
+  timezone?: string | null;
 }
