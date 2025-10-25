@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react"; // Import useState and useEffect
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card"; // Keep Card for structure/padding
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
-import { format, subDays, isSameDay } from "date-fns"; // Import isSameDay
+import { format, subDays, isSameDay } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { cn } from "@/lib/utils"; // Import cn
+import { cn } from "@/lib/utils";
 
 interface FiltersProps {
   dateRange: DateRange | undefined;
@@ -21,75 +21,95 @@ const presets = [
 
 export function Filters({ dateRange, onDateRangeChange }: FiltersProps) {
   const [activePreset, setActivePreset] = useState<number | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false); // State for popover
 
-  // Determine which preset is active based on the current dateRange
   useEffect(() => {
     let matchedPreset: number | null = null;
     const today = new Date();
-    if (dateRange?.from && dateRange?.to && isSameDay(dateRange.to, today)) {
-      for (const preset of presets) {
-        const expectedFromDate = subDays(today, preset.days);
-        if (isSameDay(dateRange.from, expectedFromDate)) {
-          matchedPreset = preset.days;
-          break;
+    today.setHours(0, 0, 0, 0); // Normalize today to start of day
+
+    if (dateRange?.from && dateRange?.to) {
+        const rangeFromStart = new Date(dateRange.from);
+        rangeFromStart.setHours(0, 0, 0, 0);
+        const rangeToEnd = new Date(dateRange.to);
+        rangeToEnd.setHours(0, 0, 0, 0);
+
+        if (isSameDay(rangeToEnd, today)) {
+            for (const preset of presets) {
+                const expectedFromDate = subDays(today, preset.days);
+                if (isSameDay(rangeFromStart, expectedFromDate)) {
+                  matchedPreset = preset.days;
+                  break;
+                }
+            }
         }
-      }
     }
     setActivePreset(matchedPreset);
   }, [dateRange]);
 
   const handlePreset = (days: number) => {
     const to = new Date();
-    const from = subDays(to, days); // Use subDays for accuracy
+    const from = subDays(to, days);
     onDateRangeChange({ from, to });
-    // setActivePreset(days); // useEffect will handle this now
+    setIsPopoverOpen(false); // Close popover if open
   };
 
   const handleCustomRangeChange = (range: DateRange | undefined) => {
       onDateRangeChange(range);
-      // setActivePreset(null); // Clear preset when custom range is selected, useEffect handles this
+      // Close popover once a range is selected
+      if (range?.from && range?.to) {
+          setIsPopoverOpen(false);
+      }
+      // If only 'from' is selected, keep popover open
   }
 
   return (
-    <Card className="animate-fade-in border-none bg-gradient-to-br from-card to-muted/30">
-      <CardContent className="pt-6">
-        <div className="flex flex-wrap items-center gap-4">
+    // Use Card for padding/structure, but make it visually subtle
+    <Card className="bg-transparent border-none shadow-none p-0">
+      <CardContent className="p-0"> {/* Remove CardContent padding */}
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 md:gap-4 bg-muted/50 rounded-lg p-3 md:p-4 border"> {/* Add background, padding, border */}
           {/* Preset Buttons */}
           <div className="flex gap-2">
             {presets.map((preset) => (
               <Button
                 key={preset.label}
-                // --- Change variant based on activePreset ---
                 variant={activePreset === preset.days ? "default" : "outline"}
                 size="sm"
                 onClick={() => handlePreset(preset.days)}
+                className={cn(
+                    "transition-all",
+                    activePreset === preset.days ? "shadow-md" : "bg-background hover:bg-accent" // Adjust styling
+                )}
               >
                 {preset.label}
               </Button>
             ))}
           </div>
 
+          {/* Separator for visual distinction (optional) */}
+          {/* <Separator orientation="vertical" className="h-6 hidden sm:block mx-2" /> */}
+
           {/* Custom Range Picker */}
-          <Popover>
+          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <PopoverTrigger asChild>
-              {/* --- Add visual cue if custom range is active --- */}
               <Button
+                 id="date-range-picker"
                  variant="outline"
                  size="sm"
                  className={cn(
-                    "w-[200px] justify-start text-left font-normal", // Base style
-                    !dateRange && "text-muted-foreground", // Style if no date selected
-                    activePreset === null && "ring-2 ring-primary ring-offset-2 ring-offset-background" // Highlight if custom range active
+                    "w-full sm:w-[240px] justify-start text-left font-normal bg-background hover:bg-accent", // Ensure background for contrast
+                    !dateRange && "text-muted-foreground",
+                    activePreset === null && dateRange && "ring-2 ring-primary ring-offset-2 ring-offset-background" // Highlight only if custom and selected
                  )}
                >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {dateRange?.from ? (
                   dateRange.to ? (
                     <>
-                      {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d")}
+                      {format(dateRange.from, "LLL dd")} - {format(dateRange.to, "LLL dd, y")}
                     </>
                   ) : (
-                    format(dateRange.from, "MMM d, yyyy")
+                    format(dateRange.from, "LLL dd, y")
                   )
                 ) : (
                   <span>Custom range</span>
@@ -102,9 +122,9 @@ export function Filters({ dateRange, onDateRangeChange }: FiltersProps) {
                 mode="range"
                 defaultMonth={dateRange?.from}
                 selected={dateRange}
-                onSelect={handleCustomRangeChange} // Use updated handler
+                onSelect={handleCustomRangeChange}
                 numberOfMonths={2}
-                disabled={{ after: new Date() }} // Prevent selecting future dates
+                disabled={{ after: new Date() }}
               />
             </PopoverContent>
           </Popover>

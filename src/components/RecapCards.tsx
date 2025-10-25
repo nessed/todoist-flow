@@ -1,13 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecapStats } from "@/types/todoist";
 import { Trophy, Flame, TrendingUp, Target } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isValid } from "date-fns"; // Import isValid
 
 interface RecapCardsProps {
   stats: RecapStats;
 }
 
 export function RecapCards({ stats }: RecapCardsProps) {
+  // --- Validate date before formatting ---
+  const bestDayDateFormatted =
+    stats.bestDay.date && isValid(parseISO(stats.bestDay.date))
+      ? format(parseISO(stats.bestDay.date), "MMM d")
+      : "-";
+  // --- End validation ---
+
   const cards = [
     {
       title: "Total Done",
@@ -24,14 +31,14 @@ export function RecapCards({ stats }: RecapCardsProps) {
     {
       title: "Best Day",
       value: stats.bestDay.count,
-      subtitle: stats.bestDay.date ? format(parseISO(stats.bestDay.date), "MMM d") : "-",
+      subtitle: bestDayDateFormatted, // Use validated date
       icon: Trophy,
       color: "text-chart-3",
     },
     {
       title: "Top Project",
       value: stats.topProject.count,
-      subtitle: stats.topProject.name,
+      subtitle: stats.topProject.name || "N/A", // Ensure subtitle exists
       icon: TrendingUp,
       color: "text-chart-4",
     },
@@ -39,21 +46,39 @@ export function RecapCards({ stats }: RecapCardsProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      {cards.map((card) => (
-        <Card key={card.title} className="relative overflow-hidden group animate-fade-in border-none bg-gradient-to-br from-card to-card/50 backdrop-blur-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="flex flex-row items-center justify-between pb-3 space-y-0 relative">
+      {cards.map((card, index) => (
+        <Card
+          key={card.title}
+          className="relative overflow-hidden group animate-card-in border bg-card shadow-card hover:shadow-card-hover transition-all duration-300"
+          // --- Add animation delay ---
+          style={{ animationDelay: `${index * 100}ms` }}
+          // --- End delay ---
+        >
+          {/* Optional: subtle background pattern or gradient */}
+          {/* <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-30 transition-opacity duration-300" /> */}
+
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10">
+            {" "}
+            {/* Adjusted padding */}
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.title}
             </CardTitle>
-            <div className={`h-10 w-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
-              <card.icon className={`h-5 w-5 ${card.color}`} />
+            {/* Icon treatment */}
+            <div
+              className={`p-2 rounded-lg bg-gradient-to-br from-muted to-background border shadow-inner`}
+            >
+              <card.icon className={`h-4 w-4 ${card.color}`} />
             </div>
           </CardHeader>
-          <CardContent className="relative">
-            <div className="text-3xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">{card.value}</div>
+          <CardContent className="relative z-10">
+            {/* Value styling */}
+            <div className="text-2xl font-bold text-foreground">
+              {card.value}
+            </div>
             {card.subtitle && (
-              <p className="text-sm text-muted-foreground mt-2 font-medium">{card.subtitle}</p>
+              <p className="text-xs text-muted-foreground pt-1">
+                {card.subtitle}
+              </p>
             )}
           </CardContent>
         </Card>

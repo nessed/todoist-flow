@@ -165,7 +165,6 @@ export function CompletionHeatmap({
         <div className="flex flex-col space-y-3">
           {/* Optional: Add Weekday Labels */}
           <div className="grid grid-cols-7 gap-2 pl-[3.5rem]">
-            {" "}
             {/* Add padding to align with days */}
             {WEEKDAY_LABELS.map((label) => (
               <div
@@ -185,7 +184,6 @@ export function CompletionHeatmap({
                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent>
-                {" "}
                 {/* Content collapses */}
                 {/* Add weekday labels on the side */}
                 <div className="flex gap-2">

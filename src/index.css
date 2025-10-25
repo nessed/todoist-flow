@@ -17,7 +17,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 220 15% 15%;
 
-    --primary: 0 85% 55%;
+    --primary: 0 85% 55%; /* Keep primary vibrant */
     --primary-foreground: 0 0% 100%;
     --primary-glow: 0 85% 65%;
 
@@ -27,8 +27,8 @@ All colors MUST be HSL.
     --muted: 220 20% 95%;
     --muted-foreground: 220 10% 45%;
 
-    --accent: 0 85% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 20% 95%; /* Make accent same as muted/secondary for subtle hover */
+    --accent-foreground: 220 15% 15%;
 
     --destructive: 0 85% 55%;
     --destructive-foreground: 0 0% 100%;
@@ -37,82 +37,63 @@ All colors MUST be HSL.
     --input: 220 15% 88%;
     --ring: 0 85% 55%;
 
-    --radius: 1rem;
+    --radius: 0.75rem; /* Slightly smaller radius */
 
-    --sidebar-background: 220 20% 97%;
-    --sidebar-foreground: 220 15% 15%;
-    --sidebar-primary: 0 85% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 95%;
-    --sidebar-accent-foreground: 220 15% 15%;
-    --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 0 85% 55%;
+    /* Removed sidebar specific variables as not used in this layout */
 
-    --chart-1: 0 85% 55%;
-    --chart-2: 210 85% 55%;
-    --chart-3: 155 85% 45%;
-    --chart-4: 280 85% 55%;
-    --chart-5: 40 85% 55%;
+    --chart-1: 0 85% 55%;   /* Primary Red/Orange */
+    --chart-2: 210 85% 55%; /* Blue */
+    --chart-3: 155 85% 45%; /* Green */
+    --chart-4: 280 85% 55%; /* Purple */
+    --chart-5: 40 85% 55%;  /* Yellow/Orange */
 
-    /* Premium effects */
-    --gradient-primary: linear-gradient(135deg, hsl(0 85% 55%), hsl(0 85% 65%));
-    --gradient-secondary: linear-gradient(135deg, hsl(220 20% 97%), hsl(220 20% 100%));
-    --shadow-elegant: 0 4px 20px -4px hsl(0 85% 55% / 0.15);
-    --shadow-card: 0 2px 8px -2px hsl(220 15% 15% / 0.06);
-    --shadow-card-hover: 0 8px 24px -4px hsl(220 15% 15% / 0.1);
+    /* Premium effects - Slightly more subtle */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 100%);
+    --shadow-card: 0 1px 3px 0 hsl(var(--foreground) / 0.05); /* Softer default */
+    --shadow-card-hover: 0 4px 12px -2px hsl(var(--foreground) / 0.08); /* Softer hover */
   }
 
   .dark {
-    --background: 220 25% 8%;
+    --background: 220 25% 6%; /* Slightly darker background */
     --foreground: 220 15% 95%;
 
-    --card: 220 20% 12%;
+    --card: 220 20% 10%; /* Slightly darker card */
     --card-foreground: 220 15% 95%;
 
-    --popover: 220 20% 12%;
+    --popover: 220 20% 10%;
     --popover-foreground: 220 15% 95%;
 
-    --primary: 0 85% 55%;
+    --primary: 0 80% 60%; /* Slightly adjusted primary for dark */
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 0 85% 65%;
+    --primary-glow: 0 80% 70%;
 
-    --secondary: 220 20% 16%;
+    --secondary: 220 20% 14%;
     --secondary-foreground: 220 15% 95%;
 
-    --muted: 220 20% 16%;
+    --muted: 220 20% 14%;
     --muted-foreground: 220 10% 55%;
 
-    --accent: 0 85% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 20% 14%; /* Accent same as muted/secondary */
+    --accent-foreground: 220 15% 95%;
 
-    --destructive: 0 85% 55%;
+    --destructive: 0 75% 60%; /* Adjusted destructive */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 20% 20%;
-    --input: 220 20% 20%;
-    --ring: 0 85% 55%;
+    --border: 220 20% 18%; /* Slightly lighter border */
+    --input: 220 20% 18%;
+    --ring: 0 80% 60%;
 
-    --sidebar-background: 220 25% 8%;
-    --sidebar-foreground: 220 15% 95%;
-    --sidebar-primary: 0 85% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 16%;
-    --sidebar-accent-foreground: 220 15% 95%;
-    --sidebar-border: 220 20% 20%;
-    --sidebar-ring: 0 85% 55%;
-
-    --chart-1: 0 85% 60%;
-    --chart-2: 210 85% 60%;
-    --chart-3: 155 85% 50%;
-    --chart-4: 280 85% 60%;
-    --chart-5: 40 85% 60%;
+    /* Chart colors slightly brighter for dark mode */
+    --chart-1: 0 80% 60%;
+    --chart-2: 210 80% 60%;
+    --chart-3: 155 75% 50%;
+    --chart-4: 280 80% 60%;
+    --chart-5: 40 80% 60%;
 
     /* Premium effects - dark mode */
-    --gradient-primary: linear-gradient(135deg, hsl(0 85% 55%), hsl(0 85% 65%));
-    --gradient-secondary: linear-gradient(135deg, hsl(220 20% 12%), hsl(220 20% 16%));
-    --shadow-elegant: 0 4px 20px -4px hsl(0 85% 55% / 0.3);
-    --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-card-hover: 0 8px 24px -4px hsl(0 0% 0% / 0.5);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 100%);
+    --shadow-card: 0 1px 2px 0 hsl(0 0% 0% / 0.15); /* Softer shadow */
+    --shadow-card-hover: 0 4px 10px -1px hsl(0 0% 0% / 0.2);
   }
 }
 
@@ -123,41 +104,58 @@ All colors MUST be HSL.
 
   /* --- Updated body style --- */
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased; /* Added antialiased */
     min-height: 100vh;
-    position: relative; /* Needed for pseudo-element positioning */
-    overflow-x: hidden; /* Prevent horizontal scrollbar from large shapes */
-    z-index: 0; /* Ensure body context is behind pseudo-elements */
+    position: relative;
+    overflow-x: hidden;
+    z-index: 0;
   }
 
-  /* --- Add these pseudo-elements for the shapes --- */
+  /* --- Slightly adjusted background shapes --- */
   body::before,
   body::after {
     content: "";
-    position: fixed; /* Fixed position so they don't scroll */
+    position: fixed;
     border-radius: 50%;
-    opacity: 0.08; /* Very low opacity */
-    z-index: -1; /* Place behind content */
-    pointer-events: none; /* Make them non-interactive */
-    filter: blur(100px); /* Heavy blur for softness */
+    opacity: 0.05; /* Even lower opacity */
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(120px); /* Even more blur */
   }
 
-  /* First Circle (e.g., primary color) */
+  /* First Circle */
   body::before {
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%);
-    top: -150px; /* Position off-screen */
-    left: -200px;
-  }
-
-  /* Second Circle (e.g., chart-2 color) */
-  body::after {
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, hsl(var(--chart-2)) 0%, transparent 70%);
-    bottom: -200px; /* Position off-screen */
-    right: -250px;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.5) 0%, transparent 70%); /* More transparent gradient */
+    top: -200px;
+    left: -250px;
   }
-  /* --- End shapes --- */
+
+  /* Second Circle */
+  body::after {
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, hsl(var(--chart-2) / 0.4) 0%, transparent 70%); /* More transparent gradient */
+    bottom: -250px;
+    right: -300px;
+  }
+}
+
+/* Add custom animations if needed, e.g., for card entry */
+@layer utilities {
+  .animate-card-in {
+    animation: card-in 0.5s ease-out forwards;
+  }
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      transform: translateY(15px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 }
