@@ -254,8 +254,42 @@ export default function Auth() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-96 bg-gradient-to-b from-primary/20 via-background/40 to-transparent blur-3xl"
       />
 
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4 lg:px-12">
+          <div className="flex items-center gap-2 text-sm font-semibold tracking-wide text-foreground">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">DG</span>
+            <span>DoneGlow</span>
+          </div>
+          <nav className="hidden gap-6 text-sm font-medium text-muted-foreground md:flex">
+            <a className="transition hover:text-foreground" href="#features">
+              Features
+            </a>
+            <a className="transition hover:text-foreground" href="#security">
+              Security
+            </a>
+            <a className="transition hover:text-foreground" href="#manual-setup">
+              Manual setup
+            </a>
+          </nav>
+          <div className="flex items-center gap-3">
+            <a
+              className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline"
+              href="mailto:hello@doneglow.app"
+            >
+              Contact
+            </a>
+            <a
+              className="rounded-full border border-primary/40 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary hover:bg-primary/10"
+              href="/"
+            >
+              Back to app
+            </a>
+          </div>
+        </div>
+      </header>
+
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 py-16 lg:grid lg:min-h-screen lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16 lg:px-12">
-        <section className="flex flex-col items-center gap-8 text-center lg:items-start lg:text-left">
+        <section id="features" className="flex flex-col items-center gap-8 text-center lg:items-start lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 text-sm text-muted-foreground backdrop-blur">
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="font-medium text-foreground">DoneGlow</span>
@@ -272,7 +306,7 @@ export default function Auth() {
             </p>
           </div>
 
-          <div className="grid w-full gap-4 sm:grid-cols-2">
+          <div id="security" className="grid w-full gap-4 sm:grid-cols-2">
             {highlightItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -295,7 +329,7 @@ export default function Auth() {
           </p>
         </section>
 
-        <div className="flex flex-col gap-6">
+        <div id="manual-setup" className="flex flex-col gap-6">
           <Card className="border-white/10 bg-background/80 shadow-[0_30px_120px_rgba(15,23,42,0.45)] backdrop-blur">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/15">
