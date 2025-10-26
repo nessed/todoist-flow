@@ -56,7 +56,7 @@ export default function Auth() {
   const configuredRedirect = import.meta.env.VITE_TODOIST_REDIRECT_URI as string | undefined;
   const requestedScope =
     (import.meta.env.VITE_TODOIST_OAUTH_SCOPE as string | undefined) ||
-    "data:read,profile:read";
+    "data:read";
 
   const redirectUri = useMemo(() => {
     if (configuredRedirect) return configuredRedirect;
@@ -164,7 +164,7 @@ export default function Auth() {
       scope: requestedScope,
       state,
     });
-
+    console.log("Redirecting to Todoist with URL:", authUrl);
     window.location.href = authUrl;
   };
 
