@@ -11,314 +11,153 @@ import {
 } from "@/types/todoist";
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
-const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
-const TODOIST_SYNC_API = "https://api.todoist.com/sync/v9";
-const TODOIST_OAUTH_AUTHORIZE = "https://todoist.com/oauth/authorize";
-const TODOIST_OAUTH_TOKEN = "https://todoist.com/oauth/access_token";
-const TODOIST_OAUTH_REVOKE = "https://api.todoist.com/rest/v2/token/revoke";
+const API_BASE = "/api/todoist";
 
-// --- Helper function MUST be defined BEFORE it's used ---
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
-  try {
-    const response = await fetch(url, options);
-    // Check for rate limit error (429)
-    if (response.status === 429 && retries > 0) {
-      const retryAfter = response.headers.get('Retry-After');
-      // Use Retry-After header if available, otherwise use default delay
-      const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
-      console.warn(`[fetchWithRetry] Rate limited. Retrying after ${waitTime / 1000} seconds... (${retries} retries left)`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      // You could implement exponential backoff here (e.g., delay * 2)
-      return fetchWithRetry(url, options, retries - 1, delay);
-    }
-     // Optional: Add basic retry for generic server errors (5xx)
-     if (!response.ok && response.status >= 500 && retries > 0) {
-       console.warn(`[fetchWithRetry] Server error (${response.status}). Retrying after ${delay / 1000} seconds... (${retries} retries left)`);
-       await new Promise(resolve => setTimeout(resolve, delay));
-       return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
-     }
-    return response; // Return response even if !ok for non-retryable errors (like 401, 403, 404)
-  } catch (error) {
-     // Handle network errors
-    if (retries > 0) {
-      console.warn(`[fetchWithRetry] Network error during fetch. Retrying after ${delay / 1000} seconds... (${retries} retries left)`, error);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchWithRetry(url, options, retries - 1, delay * 2); // Exponential backoff
-    }
-    console.error("[fetchWithRetry] Fetch failed after multiple retries.", error);
-    throw error; // Re-throw the error after exhausting retries
-  }
-}
-// --- End Helper function ---
-
-
-export type TodoistOAuthTokenResponse = {
-  access_token: string;
-  token_type?: string;
-  scope?: string;
-  expires_in?: number;
-  refresh_token?: string;
+type CompletedItemResponse = {
+  task_id?: string | number;
+  id?: string | number;
+  content?: string;
+  completed_at?: string;
+  project_id?: string | number;
+  labels?: string[];
 };
 
-export function createTodoistAuthorizationUrl({
-  clientId,
-  redirectUri,
-  scope = "data:read,data:read_write,profile:read",
-  state,
-}: {
-  clientId: string;
-  redirectUri: string;
-  scope?: string;
-  state: string;
-}): string {
-  const params = new URLSearchParams({
-    client_id: clientId,
-    scope,
-    state,
-    redirect_uri: redirectUri,
+type ProjectResponse = {
+  id: string | number;
+  name?: string;
+  color?: string;
+};
+
+type UpcomingTaskResponse = {
+  id?: string | number;
+  content?: string;
+  project_id?: string | number;
+  labels?: string[];
+  priority?: number;
+  due?: {
+    date?: string | null;
+    datetime?: string | null;
+    timezone?: string | null;
+  } | null;
+  section_id?: string | number | null;
+  url?: string;
+};
+
+type ProfileResponse = {
+  id?: string | number;
+  full_name?: string;
+  name?: string;
+  email?: string;
+  avatar_url?: string | null;
+  image_id?: string | number | null;
+  timezone?: string | null;
+};
+
+async function apiRequest(path: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    ...init,
+    headers,
   });
 
-  return `${TODOIST_OAUTH_AUTHORIZE}?${params.toString()}`;
+  if (response.status === 401) {
+    throw new Error("Authentication failed");
+  }
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Request failed");
+  }
+
+  return response.json();
 }
 
-export async function exchangeTodoistAuthCode({
-  code,
-  clientId,
-  clientSecret,
-  redirectUri,
-}: {
-  code: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-}): Promise<TodoistOAuthTokenResponse> {
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    code,
-    redirect_uri: redirectUri,
+export async function requestTodoistAuthorizeUrl({ state, scope }: { state: string; scope?: string }) {
+  const params = new URLSearchParams({ state });
+  if (scope) {
+    params.set("scope", scope);
+  }
+  const data = await apiRequest(`/auth-url?${params.toString()}`, {
+    method: "GET",
   });
+  return data.authorizeUrl as string;
+}
 
-  const response = await fetch(TODOIST_OAUTH_TOKEN, {
+export async function completeTodoistOAuth({ code, state }: { code: string; state: string }) {
+  const data = await apiRequest("/callback", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body.toString(),
+    body: JSON.stringify({ code, state }),
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Failed to exchange Todoist authorization code: ${response.status} ${response.statusText}${
-        errorText ? ` - ${errorText}` : ""
-      }`
-    );
-  }
-
-  const data = (await response.json()) as TodoistOAuthTokenResponse;
-
-  if (!data?.access_token) {
-    throw new Error("Todoist OAuth response did not include an access token.");
-  }
-
-  return data;
+  return data as { success: boolean; profile: TodoistUserProfile | null };
 }
 
-export async function revokeTodoistToken({
-  token,
-  clientId,
-  clientSecret,
-}: {
-  token: string;
-  clientId?: string;
-  clientSecret?: string;
-}): Promise<boolean> {
-  try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/x-www-form-urlencoded",
-    };
-
-    const bodyParams = new URLSearchParams({ token });
-
-    if (clientId && clientSecret) {
-      bodyParams.append("client_id", clientId);
-      bodyParams.append("client_secret", clientSecret);
-    }
-
-    const response = await fetch(TODOIST_OAUTH_REVOKE, {
-      method: "POST",
-      headers,
-      body: bodyParams.toString(),
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      console.warn(
-        `[revokeTodoistToken] Token revocation returned ${response.status}: ${response.statusText}${
-          details ? ` - ${details}` : ""
-        }`
-      );
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.warn("[revokeTodoistToken] Failed to revoke Todoist token", error);
-    return false;
-  }
+export async function establishSessionWithToken(token: string) {
+  const data = await apiRequest("/token-login", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+  return data as { success: boolean; profile: TodoistUserProfile | null };
 }
 
-
-export async function validateToken(token: string): Promise<boolean> {
-  try {
-    // Now uses the defined fetchWithRetry
-    const response = await fetchWithRetry(`${TODOIST_API_BASE}/projects`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    // Check specifically for 401 Unauthorized or 403 Forbidden
-    if (response.status === 401 || response.status === 403) {
-        console.error(`[validateToken] Authentication failed with status: ${response.status}`);
-        return false;
-    }
-    // Consider any other non-OK status as potentially invalid for this simple check
-    if (!response.ok) {
-        console.warn(`[validateToken] Received non-OK status during validation: ${response.status}`);
-        // Depending on strictness, you might return false here or rely on subsequent fetches to fail more clearly.
-        // Let's assume !ok means potential issue for validation.
-        return false;
-    }
-    return true; // Only return true if response.ok
-  } catch (error){
-    // Network errors or exhausted retries land here
-    console.error("[validateToken] Token validation failed due to network error or repeated failures:", error);
-    return false;
-  }
+export async function fetchSession() {
+  const data = await apiRequest("/session", { method: "GET" });
+  return data as { authenticated: boolean; profile: TodoistUserProfile | null };
 }
 
-// --- fetchCompletedTasks function (uses fetchWithRetry) ---
-// --- UPDATED fetchCompletedTasks function with RAW ITEM LOGGING ---
-// --- fetchCompletedTasks using /completed/get_all with CURSOR PAGINATION ---
-export async function fetchCompletedTasks(token: string, since?: string): Promise<TodoistTask[]> {
-  const headers = { Authorization: `Bearer ${token}` };
-  const allItems: TodoistTask[] = [];
-  const limit = 200; // max for this endpoint
-  let offset = 0;
-  let page = 0;
-
-  console.log(`[fetchCompletedTasks] Using offset pagination (limit=${limit})`);
-
-  while (true) {
-    page++;
-    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-    if (since) params.append("since", since); // optional filter by completion time
-
-    const url = `${TODOIST_SYNC_API}/completed/get_all?${params.toString()}`;
-    console.log(`[fetchCompletedTasks] Page ${page} (offset=${offset})...`);
-
-    const res = await fetchWithRetry(url, { headers });
-
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(`Authentication failed (${res.status}). Check your Todoist token.`);
-    }
-    if (!res.ok) {
-      throw new Error(`Failed to fetch completed tasks: ${res.status} ${await res.text()}`);
-    }
-
-    const data = await res.json();
-    const items = Array.isArray(data.items) ? data.items : [];
-    console.log(`[fetchCompletedTasks] Page ${page} received ${items.length} items`);
-
-    allItems.push(
-      ...items.map((item: any) => ({
-        id: item.task_id?.toString() ?? item.id?.toString(),
-        content: item.content ?? "",
-        completed_at: item.completed_at,
-        project_id: item.project_id?.toString() ?? "",
-        labels: item.labels ?? [],
-      }))
-    );
-
-    if (items.length < limit) {
-      console.log("[fetchCompletedTasks] Reached last page.");
-      break; // no more pages
-    }
-
-    offset += limit; // paginate
-  }
-
-  console.log(`[fetchCompletedTasks] Total fetched: ${allItems.length}`);
-  return allItems;
+export async function logoutSession() {
+  await apiRequest("/logout", { method: "POST" });
 }
 
-// --- END fetchCompletedTasks ---
-
-// *** Keep the rest of your src/lib/todoist.ts file the same ***
-// --- END UPDATED fetchCompletedTasks function ---
-
-// *** Keep the rest of your src/lib/todoist.ts file the same ***
-// (fetchWithRetry, validateToken, fetchProjects, processTasks, calculateDayStats, etc.)
-// --- END fetchCompletedTasks function ---
-
-
-export async function fetchProjects(token: string): Promise<TodoistProject[]> {
-  const url = `${TODOIST_API_BASE}/projects`;
-  const headers = { Authorization: `Bearer ${token}` };
-
-  // Use the fetchWithRetry helper
-  const response = await fetchWithRetry(url, { headers });
-
-   // Handle non-retryable errors like Unauthorized
-    if (response.status === 401 || response.status === 403) {
-        console.error(`[fetchProjects] Authentication error (${response.status}). Please check API token.`);
-        throw new Error(`Authentication failed (${response.status}). Is your Todoist token valid?`);
-    }
-
-  if (!response.ok) {
-     const errorText = await response.text();
-     console.error(`[fetchProjects] Fetch projects failed! Status: ${response.status}`, errorText);
-    throw new Error(`Failed to fetch projects: ${response.statusText} (${response.status}) - ${errorText}`);
+export async function fetchCompletedTasks(since?: string): Promise<TodoistTask[]> {
+  const params = new URLSearchParams();
+  if (since) {
+    params.set("since", since);
   }
 
-  const projectsData = await response.json();
-  return projectsData.map((p: any) => ({
-      id: p.id.toString(),
-      name: p.name || `Project ${p.id}`,
-      color: p.color || "#808080",
+  const data = (await apiRequest(`/completed?${params.toString()}`, {
+    method: "GET",
+  })) as { items?: CompletedItemResponse[] };
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.map((item) => ({
+    id: item.task_id !== undefined ? String(item.task_id) : item.id !== undefined ? String(item.id) : "",
+    content: item.content ?? "",
+    completed_at: item.completed_at ?? "",
+    project_id: item.project_id !== undefined ? String(item.project_id) : "",
+    labels: Array.isArray(item.labels) ? item.labels : [],
+  }));
+}
+
+export async function fetchProjects(): Promise<TodoistProject[]> {
+  const data = (await apiRequest("/projects", { method: "GET" })) as { projects?: ProjectResponse[] };
+  const projectsData = Array.isArray(data.projects) ? data.projects : [];
+  return projectsData.map((project) => ({
+    id: String(project.id),
+    name: project.name ?? `Project ${project.id}`,
+    color: project.color ?? "#808080",
   }));
 }
 
 
 export async function fetchUpcomingTasks(
-  token: string,
   filter: string = "(overdue | today | due before: +7 days) & !@done"
 ): Promise<TodoistActiveTask[]> {
   const params = new URLSearchParams({ filter });
-  const url = `${TODOIST_API_BASE}/tasks?${params.toString()}`;
-  const headers = { Authorization: `Bearer ${token}` };
+  const data = (await apiRequest(`/upcoming?${params.toString()}`, {
+    method: "GET",
+  })) as { tasks?: UpcomingTaskResponse[] };
 
-  const response = await fetchWithRetry(url, { headers });
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
 
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to fetch upcoming tasks: ${response.statusText} (${response.status}) - ${errorText}`);
-  }
-
-  const tasks = await response.json();
-
-  if (!Array.isArray(tasks)) {
-    console.warn("[fetchUpcomingTasks] Unexpected response shape", tasks);
-    return [];
-  }
-
-  return tasks.map((task: any) => ({
-    id: task.id?.toString?.() ?? "",
+  return tasks.map((task) => ({
+    id: task.id !== undefined ? String(task.id) : "",
     content: task.content ?? "",
-    project_id: task.project_id?.toString?.() ?? "",
+    project_id: task.project_id !== undefined ? String(task.project_id) : "",
     labels: Array.isArray(task.labels) ? task.labels : [],
     priority: typeof task.priority === "number" ? task.priority : 1,
     due: task.due
@@ -328,57 +167,29 @@ export async function fetchUpcomingTasks(
           timezone: task.due.timezone ?? null,
         }
       : null,
-    section_id: task.section_id?.toString?.() ?? null,
+    section_id: task.section_id !== undefined && task.section_id !== null ? String(task.section_id) : null,
     url: task.url ?? undefined,
   }));
 }
 
 
-export async function fetchUserProfile(token: string): Promise<TodoistUserProfile> {
-  const url = `${TODOIST_SYNC_API}/sync`;
-  const body = JSON.stringify({ resource_types: "[\"user\"]" });
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
-
-  const response = await fetchWithRetry(url, {
-    method: "POST",
-    headers,
-    body,
-  });
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to fetch user profile: ${response.statusText} (${response.status}) - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const profile = data?.user ?? {};
+export async function fetchUserProfile(): Promise<TodoistUserProfile> {
+  const data = (await apiRequest("/profile", { method: "GET" })) as { profile?: ProfileResponse | null };
+  const profile = data?.profile ?? {};
 
   const rawImageId = profile.image_id ?? null;
   let avatarUrl: string | null = null;
 
-  if (typeof profile.avatar_big === "string" && profile.avatar_big.length > 0) {
-    avatarUrl = profile.avatar_big;
-  } else if (typeof profile.avatar_medium === "string" && profile.avatar_medium.length > 0) {
-    avatarUrl = profile.avatar_medium;
-  } else if (typeof profile.avatar_url === "string" && profile.avatar_url.length > 0) {
+  if (typeof profile.avatar_url === "string" && profile.avatar_url.length > 0) {
     avatarUrl = profile.avatar_url;
-  } else if (rawImageId) {
-    avatarUrl = `https://dcff1xvirvpb3.cloudfront.net/${rawImageId}.jpg`;
   }
 
   return {
-    id: profile.id?.toString?.() ?? "user",
+    id: profile.id !== undefined ? String(profile.id) : "user",
     full_name: profile.full_name ?? profile.name ?? "Todoist user",
     email: profile.email ?? "",
     avatar_url: avatarUrl,
-    image_id: rawImageId ? rawImageId.toString() : null,
+    image_id: rawImageId !== null && rawImageId !== undefined ? String(rawImageId) : null,
     timezone: profile.timezone ?? null,
   };
 }
@@ -491,7 +302,7 @@ export function calculateProjectStats(
     }
     totalTasks++; // Increment total task count
 
-    let projectId = task.project_id;
+    const projectId = task.project_id;
     let projectName = `Unknown/Archived (${task.project_id})`;
     let projectColor = "#808080"; // Default grey
     let projectKey = `unknown-${task.project_id}`;

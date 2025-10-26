@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Card,
@@ -12,11 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart3, CheckCircle2, LogIn, ShieldCheck, Sparkles } from "lucide-react";
+import type { TodoistUserProfile } from "@/types/todoist";
 import {
-  createTodoistAuthorizationUrl,
-  exchangeTodoistAuthCode,
-  revokeTodoistToken,
-  validateToken,
+  requestTodoistAuthorizeUrl,
+  completeTodoistOAuth,
+  logoutSession,
+  establishSessionWithToken,
+  fetchSession,
 } from "@/lib/todoist";
 
 const TODOIST_STATE_KEY = "todoist_oauth_state";
@@ -46,28 +48,47 @@ export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [token, setToken] = useState(() => localStorage.getItem("todoist_token") ?? "");
+  const [token, setToken] = useState("");
   const [tokenLoading, setTokenLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [session, setSession] = useState<{
+    authenticated: boolean;
+    profile: TodoistUserProfile | null;
+  } | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [oauthConfigured, setOauthConfigured] = useState(true);
 
-  const clientId = import.meta.env.VITE_TODOIST_CLIENT_ID as string | undefined;
-  const clientSecret = import.meta.env.VITE_TODOIST_CLIENT_SECRET as string | undefined;
-  const configuredRedirect = import.meta.env.VITE_TODOIST_REDIRECT_URI as string | undefined;
   const requestedScope =
     (import.meta.env.VITE_TODOIST_OAUTH_SCOPE as string | undefined) ||
     "data:read";
 
-  const redirectUri = useMemo(() => {
-    if (configuredRedirect) return configuredRedirect;
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}/auth`;
-    }
-    return "";
-  }, [configuredRedirect]);
+  const hasStoredToken = Boolean(session?.authenticated);
+  const canStartOAuth = oauthConfigured && !sessionLoading;
 
-  const hasStoredToken = Boolean(token);
-  const canStartOAuth = Boolean(clientId && clientSecret && redirectUri);
+  useEffect(() => {
+    let active = true;
+    setSessionLoading(true);
+
+    fetchSession()
+      .then((data) => {
+        if (!active) return;
+        setSession(data);
+      })
+      .catch((error) => {
+        console.error("[Auth] Failed to load session", error);
+        if (!active) return;
+        setSession({ authenticated: false, profile: null });
+      })
+      .finally(() => {
+        if (!active) return;
+        setSessionLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -89,17 +110,6 @@ export default function Auth() {
       return;
     }
 
-    if (!clientId || !clientSecret) {
-      toast({
-        title: "OAuth not configured",
-        description:
-          "Set VITE_TODOIST_CLIENT_ID and VITE_TODOIST_CLIENT_SECRET to enable Todoist sign-in.",
-        variant: "destructive",
-      });
-      clearOAuthParams();
-      return;
-    }
-
     const storedState = typeof window !== "undefined" ? sessionStorage.getItem(TODOIST_STATE_KEY) : null;
     if (storedState && state && storedState !== state) {
       toast({
@@ -113,15 +123,10 @@ export default function Auth() {
 
     setOauthLoading(true);
 
-    exchangeTodoistAuthCode({
-      code,
-      clientId,
-      clientSecret,
-      redirectUri,
-    })
+    completeTodoistOAuth({ code, state })
       .then((response) => {
-        localStorage.setItem("todoist_token", response.access_token);
-        setToken(response.access_token);
+        setSession({ authenticated: true, profile: response.profile ?? null });
+        setToken("");
         toast({
           title: "Connected to Todoist",
           description: "Your DoneGlow dashboard will now personalize itself with your Todoist history.",
@@ -146,10 +151,10 @@ export default function Auth() {
           sessionStorage.removeItem(TODOIST_STATE_KEY);
         }
       });
-  }, [clientId, clientSecret, redirectUri, navigate, search, toast]);
+  }, [navigate, search, toast]);
 
-  const handleTodoistLogin = () => {
-    if (!canStartOAuth || !clientId) {
+  const handleTodoistLogin = async () => {
+    if (!canStartOAuth) {
       return;
     }
 
@@ -158,15 +163,24 @@ export default function Auth() {
       sessionStorage.setItem(TODOIST_STATE_KEY, state);
     }
 
-    const authUrl = createTodoistAuthorizationUrl({
-      clientId,
-      redirectUri,
-      scope: requestedScope,
-      state,
-    });
-    
-    console.log("Redirecting to Todoist with URL:", authUrl);
-    window.location.href = authUrl;
+    setOauthLoading(true);
+    try {
+      const authUrl = await requestTodoistAuthorizeUrl({ state, scope: requestedScope });
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("[Auth] Failed to build Todoist authorize URL", error);
+      setOauthConfigured(false);
+      toast({
+        title: "Todoist sign-in unavailable",
+        description:
+          error instanceof Error
+            ? error.message
+            : "The server could not start the Todoist authorization flow.",
+        variant: "destructive",
+      });
+    } finally {
+      setOauthLoading(false);
+    }
   };
 
   const handleTokenSubmit = async (event: React.FormEvent) => {
@@ -182,43 +196,41 @@ export default function Auth() {
     }
 
     setTokenLoading(true);
-    const isValid = await validateToken(token.trim());
-    setTokenLoading(false);
-
-    if (!isValid) {
+    try {
+      const response = await establishSessionWithToken(token.trim());
+      setSession({ authenticated: true, profile: response.profile ?? null });
+      setToken("");
+      toast({
+        title: "Token saved",
+        description: "Connected to Todoist with your personal API token.",
+      });
+      navigate("/");
+    } catch (error) {
+      console.error("[Auth] Token login failed", error);
       toast({
         title: "Invalid token",
-        description: "Todoist rejected this token. Double-check it in Todoist's developer settings.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Todoist rejected this token. Double-check it in Todoist's developer settings.",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setTokenLoading(false);
     }
-
-    localStorage.setItem("todoist_token", token.trim());
-    toast({
-      title: "Token saved",
-      description: "Connected to Todoist with your personal API token.",
-    });
-    navigate("/");
   };
 
   const handleDisconnect = async () => {
     if (!hasStoredToken) return;
 
     setDisconnecting(true);
-    const revoked = await revokeTodoistToken({
-      token,
-      clientId,
-      clientSecret,
-    });
-    setDisconnecting(false);
-
-    if (!revoked) {
-      console.warn("[Auth] Todoist token revocation returned a non-success status. Proceeding to clear token locally.");
+    try {
+      await logoutSession();
+      setSession({ authenticated: false, profile: null });
+      setToken("");
+    } finally {
+      setDisconnecting(false);
     }
-
-    localStorage.removeItem("todoist_token");
-    setToken("");
     toast({
       title: "Disconnected",
       description: "Todoist access has been cleared for this browser.",
@@ -239,7 +251,7 @@ export default function Auth() {
     {
       icon: ShieldCheck,
       title: "Keep access secure",
-      description: "Authorize with Todoist OAuth or drop in an API token—either way, it stays safely on this device.",
+      description: "Authorize with Todoist OAuth or drop in an API token—either way, we keep the credentials behind a secure session.",
     },
   ];
 
@@ -316,11 +328,11 @@ export default function Auth() {
               >
                 {oauthLoading ? "Connecting..." : "Continue with Todoist"}
               </Button>
-              {!canStartOAuth && (
+              {!canStartOAuth && !sessionLoading && (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                  Configure <code className="font-mono">VITE_TODOIST_CLIENT_ID</code>,{" "}
-                  <code className="font-mono">VITE_TODOIST_CLIENT_SECRET</code>, and{" "}
-                  <code className="font-mono">VITE_TODOIST_REDIRECT_URI</code> in your environment to enable Todoist sign-in.
+                  Configure <code className="font-mono">TODOIST_CLIENT_ID</code>,{" "}
+                  <code className="font-mono">TODOIST_CLIENT_SECRET</code>, and{" "}
+                  <code className="font-mono">TODOIST_REDIRECT_URI</code> on the server to enable Todoist sign-in.
                 </div>
               )}
               <p className="text-sm text-muted-foreground">
@@ -347,8 +359,8 @@ export default function Auth() {
               </div>
               <CardTitle className="text-3xl font-bold">Use an API token instead</CardTitle>
               <CardDescription className="text-base">
-                Prefer the classic approach? Paste your Todoist API token directly and we&apos;ll store it securely in this
-                browser.
+                Prefer the classic approach? Paste your Todoist API token directly and we&apos;ll lock it in a secure session
+                cookie.
               </CardDescription>
             </CardHeader>
             <CardContent>
