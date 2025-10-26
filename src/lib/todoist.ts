@@ -1,8 +1,21 @@
-import { TodoistTask, TodoistProject, ProcessedTask, DayStats, ProjectStats, HourStats, RecapStats } from "@/types/todoist";
+import {
+  TodoistTask,
+  TodoistProject,
+  ProcessedTask,
+  DayStats,
+  ProjectStats,
+  HourStats,
+  RecapStats,
+  TodoistUserProfile,
+  TodoistActiveTask,
+} from "@/types/todoist";
 import { format, parseISO, startOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 
 const TODOIST_API_BASE = "https://api.todoist.com/rest/v2";
 const TODOIST_SYNC_API = "https://api.todoist.com/sync/v9";
+const TODOIST_OAUTH_AUTHORIZE = "https://todoist.com/oauth/authorize";
+const TODOIST_OAUTH_TOKEN = "https://todoist.com/oauth/access_token";
+const TODOIST_OAUTH_REVOKE = "https://api.todoist.com/rest/v2/token/revoke";
 
 // --- Helper function MUST be defined BEFORE it's used ---
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
@@ -37,6 +50,124 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
   }
 }
 // --- End Helper function ---
+
+
+export type TodoistOAuthTokenResponse = {
+  access_token: string;
+  token_type?: string;
+  scope?: string;
+  expires_in?: number;
+  refresh_token?: string;
+};
+
+export function createTodoistAuthorizationUrl({
+  clientId,
+  redirectUri,
+  scope = "data:read,data:read_write,profile:read",
+  state,
+}: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  state: string;
+}): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    scope,
+    state,
+    redirect_uri: redirectUri,
+  });
+
+  return `${TODOIST_OAUTH_AUTHORIZE}?${params.toString()}`;
+}
+
+export async function exchangeTodoistAuthCode({
+  code,
+  clientId,
+  clientSecret,
+  redirectUri,
+}: {
+  code: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): Promise<TodoistOAuthTokenResponse> {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+    redirect_uri: redirectUri,
+  });
+
+  const response = await fetch(TODOIST_OAUTH_TOKEN, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Failed to exchange Todoist authorization code: ${response.status} ${response.statusText}${
+        errorText ? ` - ${errorText}` : ""
+      }`
+    );
+  }
+
+  const data = (await response.json()) as TodoistOAuthTokenResponse;
+
+  if (!data?.access_token) {
+    throw new Error("Todoist OAuth response did not include an access token.");
+  }
+
+  return data;
+}
+
+export async function revokeTodoistToken({
+  token,
+  clientId,
+  clientSecret,
+}: {
+  token: string;
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<boolean> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+
+    const bodyParams = new URLSearchParams({ token });
+
+    if (clientId && clientSecret) {
+      bodyParams.append("client_id", clientId);
+      bodyParams.append("client_secret", clientSecret);
+    }
+
+    const response = await fetch(TODOIST_OAUTH_REVOKE, {
+      method: "POST",
+      headers,
+      body: bodyParams.toString(),
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.warn(
+        `[revokeTodoistToken] Token revocation returned ${response.status}: ${response.statusText}${
+          details ? ` - ${details}` : ""
+        }`
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("[revokeTodoistToken] Failed to revoke Todoist token", error);
+    return false;
+  }
+}
 
 
 export async function validateToken(token: string): Promise<boolean> {
@@ -155,6 +286,101 @@ export async function fetchProjects(token: string): Promise<TodoistProject[]> {
       name: p.name || `Project ${p.id}`,
       color: p.color || "#808080",
   }));
+}
+
+
+export async function fetchUpcomingTasks(
+  token: string,
+  filter: string = "(overdue | today | due before: +7 days) & !@done"
+): Promise<TodoistActiveTask[]> {
+  const params = new URLSearchParams({ filter });
+  const url = `${TODOIST_API_BASE}/tasks?${params.toString()}`;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const response = await fetchWithRetry(url, { headers });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch upcoming tasks: ${response.statusText} (${response.status}) - ${errorText}`);
+  }
+
+  const tasks = await response.json();
+
+  if (!Array.isArray(tasks)) {
+    console.warn("[fetchUpcomingTasks] Unexpected response shape", tasks);
+    return [];
+  }
+
+  return tasks.map((task: any) => ({
+    id: task.id?.toString?.() ?? "",
+    content: task.content ?? "",
+    project_id: task.project_id?.toString?.() ?? "",
+    labels: Array.isArray(task.labels) ? task.labels : [],
+    priority: typeof task.priority === "number" ? task.priority : 1,
+    due: task.due
+      ? {
+          date: task.due.date ?? null,
+          datetime: task.due.datetime ?? null,
+          timezone: task.due.timezone ?? null,
+        }
+      : null,
+    section_id: task.section_id?.toString?.() ?? null,
+    url: task.url ?? undefined,
+  }));
+}
+
+
+export async function fetchUserProfile(token: string): Promise<TodoistUserProfile> {
+  const url = `${TODOIST_SYNC_API}/sync`;
+  const body = JSON.stringify({ resource_types: "[\"user\"]" });
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetchWithRetry(url, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Authentication failed (${response.status}). Check your Todoist token.`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch user profile: ${response.statusText} (${response.status}) - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const profile = data?.user ?? {};
+
+  const rawImageId = profile.image_id ?? null;
+  let avatarUrl: string | null = null;
+
+  if (typeof profile.avatar_big === "string" && profile.avatar_big.length > 0) {
+    avatarUrl = profile.avatar_big;
+  } else if (typeof profile.avatar_medium === "string" && profile.avatar_medium.length > 0) {
+    avatarUrl = profile.avatar_medium;
+  } else if (typeof profile.avatar_url === "string" && profile.avatar_url.length > 0) {
+    avatarUrl = profile.avatar_url;
+  } else if (rawImageId) {
+    avatarUrl = `https://dcff1xvirvpb3.cloudfront.net/${rawImageId}.jpg`;
+  }
+
+  return {
+    id: profile.id?.toString?.() ?? "user",
+    full_name: profile.full_name ?? profile.name ?? "Todoist user",
+    email: profile.email ?? "",
+    avatar_url: avatarUrl,
+    image_id: rawImageId ? rawImageId.toString() : null,
+    timezone: profile.timezone ?? null,
+  };
 }
 
 

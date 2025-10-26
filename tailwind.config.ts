@@ -107,12 +107,21 @@ export default {
             opacity: "1"
           }
         },
+        "orb-drift": {
+          "0%, 100%": {
+            transform: "translate3d(0,0,0) scale(1)",
+          },
+          "50%": {
+            transform: "translate3d(4%, -6%, 0) scale(1.06)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.5s ease-out",
         "scale-in": "scale-in 0.3s ease-out",
+        "orb-drift": "orb-drift 24s ease-in-out infinite",
       },
     },
   },
