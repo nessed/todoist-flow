@@ -19,6 +19,7 @@ import {
   logoutSession,
   establishSessionWithToken,
   fetchSession,
+  ApiError,
 } from "@/lib/todoist";
 
 const TODOIST_STATE_KEY = "todoist_oauth_state";
@@ -79,6 +80,9 @@ export default function Auth() {
         console.error("[Auth] Failed to load session", error);
         if (!active) return;
         setSession({ authenticated: false, profile: null });
+        if (error instanceof ApiError && error.status === 503) {
+          setOauthConfigured(false);
+        }
       })
       .finally(() => {
         if (!active) return;
@@ -143,6 +147,9 @@ export default function Auth() {
               : "Unexpected error while connecting to Todoist.",
           variant: "destructive",
         });
+        if (exchangeError instanceof ApiError && exchangeError.status === 503) {
+          setOauthConfigured(false);
+        }
       })
       .finally(() => {
         clearOAuthParams();
@@ -169,7 +176,9 @@ export default function Auth() {
       window.location.href = authUrl;
     } catch (error) {
       console.error("[Auth] Failed to build Todoist authorize URL", error);
-      setOauthConfigured(false);
+      if (error instanceof ApiError && error.status === 503) {
+        setOauthConfigured(false);
+      }
       toast({
         title: "Todoist sign-in unavailable",
         description:
@@ -215,6 +224,9 @@ export default function Auth() {
             : "Todoist rejected this token. Double-check it in Todoist's developer settings.",
         variant: "destructive",
       });
+      if (error instanceof ApiError && error.status === 503) {
+        setOauthConfigured(false);
+      }
     } finally {
       setTokenLoading(false);
     }
@@ -331,8 +343,9 @@ export default function Auth() {
               {!canStartOAuth && !sessionLoading && (
                 <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                   Configure <code className="font-mono">TODOIST_CLIENT_ID</code>,{" "}
-                  <code className="font-mono">TODOIST_CLIENT_SECRET</code>, and{" "}
-                  <code className="font-mono">TODOIST_REDIRECT_URI</code> on the server to enable Todoist sign-in.
+                  <code className="font-mono">TODOIST_CLIENT_SECRET</code>,{" "}
+                  <code className="font-mono">TODOIST_REDIRECT_URI</code>, and{" "}
+                  <code className="font-mono">TODOIST_SESSION_SECRET</code> on the server to enable Todoist sign-in.
                 </div>
               )}
               <p className="text-sm text-muted-foreground">

@@ -10,10 +10,20 @@ export type SessionPayload = {
   accessToken: string;
 };
 
+export class SessionSecretMissingError extends Error {
+  missing: string[];
+
+  constructor() {
+    super("TODOIST_SESSION_SECRET is not configured");
+    this.name = "SessionSecretMissingError";
+    this.missing = ["TODOIST_SESSION_SECRET"];
+  }
+}
+
 function getSessionSecret(): Uint8Array {
   const secret = process.env.TODOIST_SESSION_SECRET;
   if (!secret) {
-    throw new Error("TODOIST_SESSION_SECRET is not configured");
+    throw new SessionSecretMissingError();
   }
 
   const hash = createHash("sha256").update(secret).digest();
@@ -76,6 +86,9 @@ export async function readSession(req: VercelRequest): Promise<SessionPayload | 
     }
     return { accessToken: payload.accessToken };
   } catch (error) {
+    if (error instanceof SessionSecretMissingError) {
+      throw error;
+    }
     console.warn("[session] Failed to decrypt session cookie", error);
     return null;
   }
@@ -85,11 +98,19 @@ export async function requireSession(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<SessionPayload | null> {
-  const session = await readSession(req);
-  if (!session) {
-    res.status(401).json({ error: "Unauthorized" });
-    return null;
+  try {
+    const session = await readSession(req);
+    if (!session) {
+      res.status(401).json({ error: "Unauthorized" });
+      return null;
+    }
+    return session;
+  } catch (error) {
+    if (error instanceof SessionSecretMissingError) {
+      res.status(503).json({ error: error.message, missing: error.missing });
+      return null;
+    }
+    throw error;
   }
-  return session;
 }
 

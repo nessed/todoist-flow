@@ -4,7 +4,54 @@ const TODOIST_OAUTH_AUTHORIZE = "https://todoist.com/oauth/authorize";
 const TODOIST_OAUTH_TOKEN = "https://todoist.com/oauth/access_token";
 const TODOIST_OAUTH_REVOKE = "https://api.todoist.com/rest/v2/token/revoke";
 
-export { TODOIST_API_BASE, TODOIST_SYNC_API, TODOIST_OAUTH_AUTHORIZE, TODOIST_OAUTH_TOKEN, TODOIST_OAUTH_REVOKE };
+export {
+  TODOIST_API_BASE,
+  TODOIST_SYNC_API,
+  TODOIST_OAUTH_AUTHORIZE,
+  TODOIST_OAUTH_TOKEN,
+  TODOIST_OAUTH_REVOKE,
+};
+
+export class TodoistConfigError extends Error {
+  missing: string[];
+
+  constructor(missing: string[]) {
+    super(
+      missing.length > 0
+        ? `Todoist OAuth is not fully configured. Missing: ${missing.join(", ")}`
+        : "Todoist OAuth is not configured"
+    );
+    this.name = "TodoistConfigError";
+    this.missing = missing;
+  }
+}
+
+function readEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function ensureOAuthConfig({ requireSecret = false }: { requireSecret?: boolean } = {}) {
+  const missing: string[] = [];
+
+  const clientId = readEnv("TODOIST_CLIENT_ID");
+  const redirectUri = readEnv("TODOIST_REDIRECT_URI");
+  const clientSecret = readEnv("TODOIST_CLIENT_SECRET");
+
+  if (!clientId) missing.push("TODOIST_CLIENT_ID");
+  if (!redirectUri) missing.push("TODOIST_REDIRECT_URI");
+  if (requireSecret && !clientSecret) missing.push("TODOIST_CLIENT_SECRET");
+
+  if (missing.length > 0) {
+    throw new TodoistConfigError(missing);
+  }
+
+  return {
+    clientId,
+    redirectUri,
+    clientSecret: clientSecret ?? "",
+  };
+}
 
 type TodoistProjectRaw = {
   id: string | number;
@@ -104,12 +151,7 @@ export async function revokeToken(accessToken: string, clientId?: string, client
 }
 
 export async function exchangeCodeForToken(code: string, redirectUri: string) {
-  const clientId = process.env.TODOIST_CLIENT_ID;
-  const clientSecret = process.env.TODOIST_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error("Todoist OAuth is not configured");
-  }
+  const { clientId, clientSecret } = ensureOAuthConfig({ requireSecret: true });
 
   const body = new URLSearchParams({
     client_id: clientId,
@@ -137,20 +179,12 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
 }
 
 export function getConfiguredRedirectUri() {
-  const redirect = process.env.TODOIST_REDIRECT_URI;
-  if (!redirect) {
-    throw new Error("TODOIST_REDIRECT_URI is not configured");
-  }
-  return redirect;
+  const { redirectUri } = ensureOAuthConfig();
+  return redirectUri;
 }
 
 export function buildAuthorizeUrl(state: string, scope?: string) {
-  const clientId = process.env.TODOIST_CLIENT_ID;
-  const redirectUri = process.env.TODOIST_REDIRECT_URI;
-
-  if (!clientId || !redirectUri) {
-    throw new Error("Todoist OAuth is not configured");
-  }
+  const { clientId, redirectUri } = ensureOAuthConfig();
 
   const params = new URLSearchParams({
     client_id: clientId,

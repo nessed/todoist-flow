@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createSessionCookie } from "./_session";
-import { exchangeCodeForToken, fetchTodoistProfile, getConfiguredRedirectUri } from "./_todoist";
+import { createSessionCookie, SessionSecretMissingError } from "./_session";
+import {
+  TodoistConfigError,
+  exchangeCodeForToken,
+  fetchTodoistProfile,
+  getConfiguredRedirectUri,
+} from "./_todoist";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
@@ -26,6 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const profile = await fetchTodoistProfile(accessToken).catch(() => null);
     return res.status(200).json({ success: true, profile });
   } catch (error) {
+    if (error instanceof TodoistConfigError) {
+      return res.status(503).json({ error: error.message, missing: error.missing });
+    }
+    if (error instanceof SessionSecretMissingError) {
+      return res.status(503).json({ error: error.message, missing: error.missing });
+    }
     const message = error instanceof Error ? error.message : "Failed to complete OAuth";
     return res.status(500).json({ error: message });
   }

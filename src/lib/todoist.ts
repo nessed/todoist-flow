@@ -53,6 +53,18 @@ type ProfileResponse = {
   timezone?: string | null;
 };
 
+export class ApiError extends Error {
+  status?: number;
+  payload?: unknown;
+
+  constructor(message: string, status?: number, payload?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 async function apiRequest(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type") && init?.body) {
@@ -70,8 +82,37 @@ async function apiRequest(path: string, init?: RequestInit) {
   }
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Request failed");
+    const contentType = response.headers.get("content-type") ?? "";
+    let payload: unknown;
+    let message = "Request failed";
+
+    if (contentType.includes("application/json")) {
+      try {
+        payload = await response.json();
+        if (payload && typeof payload === "object" && "error" in payload) {
+          const errorMessage = (payload as { error?: unknown }).error;
+          if (typeof errorMessage === "string" && errorMessage.trim().length > 0) {
+            message = errorMessage;
+          }
+        } else if (payload && typeof payload === "object" && "message" in payload) {
+          const errorMessage = (payload as { message?: unknown }).message;
+          if (typeof errorMessage === "string" && errorMessage.trim().length > 0) {
+            message = errorMessage;
+          }
+        } else if (typeof payload === "string" && payload.trim().length > 0) {
+          message = payload;
+        }
+      } catch {
+        payload = undefined;
+      }
+    } else {
+      const text = await response.text();
+      if (text.trim().length > 0) {
+        message = text;
+      }
+    }
+
+    throw new ApiError(message, response.status, payload);
   }
 
   return response.json();
