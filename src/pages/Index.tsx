@@ -738,7 +738,7 @@ export default function Index() {
     // Check if there's data to display (either real or sample)
     if (tasks.length > 0 && projects.length > 0) {
       return (
-        <div className="space-y-12">
+        <div className="space-y-10">
           <section className="grid gap-6 xl:grid-cols-[2.35fr,1fr]">
             <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-primary/12 via-background/95 to-background p-10 shadow-[0_32px_70px_-30px_rgba(15,23,42,0.6)]">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_65%)]" />
@@ -889,141 +889,164 @@ export default function Index() {
             </aside>
           </section>
 
-          <section className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,hsla(var(--primary),0.16),transparent_70%)]" />
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,hsla(var(--accent),0.12),transparent_68%)]" />
-            <div className="relative">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">Action plan</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {totalActionable > 0
-                      ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
-                      : "We couldn't find any active tasks with due dates. Add a few in Todoist to activate the planner."}
-                  </p>
-                </div>
-                <Badge
-                  variant="secondary"
-                  className="w-fit rounded-full border border-primary/30 bg-primary/10 text-xs uppercase tracking-[0.28em] text-primary"
-                >
-                  Live Todoist sync
-                </Badge>
-              </div>
-              <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-                {planColumnMeta.map((column) => {
-                  const bucket = actionPlan[column.key];
-                  return (
-                    <div
-                      key={column.key}
-                      className="relative overflow-hidden rounded-3xl border border-white/10 bg-background/85 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]"
-                    >
-                    <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${column.gradient}`} />
-                    <div className="relative space-y-4">
-                      <div>
-                        <h3 className="text-base font-semibold text-foreground">{column.title}</h3>
-                        <p className="text-xs text-muted-foreground">{column.description}</p>
-                      </div>
-                      {bucket.length ? (
-                        <ul className="space-y-3">
-                          {bucket.slice(0, ACTION_PLAN_LIMIT).map((item) => (
-                            <li
-                              key={item.id}
-                              className="group rounded-2xl border border-white/10 bg-background/80 p-4 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.55)]"
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div>
-                                  <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                                    {item.content}
-                                  </p>
-                                  <p className="mt-1 text-xs text-muted-foreground">{item.projectName}</p>
-                                </div>
-                                <Badge
-                                  variant="outline"
-                                  className={`rounded-full border px-2 py-1 text-[11px] ${item.priorityTone}`}
-                                >
-                                  {item.priorityLabel}
-                                </Badge>
-                              </div>
-                              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground/80">
-                                <span>{item.dueLabel}</span>
-                                {item.url ? (
-                                  <a
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-primary transition-colors hover:text-primary/80"
-                                  >
-                                    Open
-                                    <ArrowUpRight className="h-3 w-3" />
-                                  </a>
-                                ) : null}
-                              </div>
-                            </li>
-                          ))}
-                          {bucket.length > ACTION_PLAN_LIMIT && (
-                            <p className="text-xs text-muted-foreground/70">
-                              +{bucket.length - ACTION_PLAN_LIMIT} more queued in Todoist
-                            </p>
-                          )}
-                        </ul>
-                      ) : (
-                        <div className="rounded-2xl border border-dashed border-white/15 bg-background/70 p-4 text-sm text-muted-foreground">
-                          {column.emptyState}
-                        </div>
-                      )}
-                    </div>
+          <section className="grid gap-6 xl:grid-cols-[minmax(0,1.75fr),minmax(0,1fr)] xl:items-start">
+            <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/85 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,hsla(var(--primary),0.16),transparent_70%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,hsla(var(--accent),0.12),transparent_68%)]" />
+              <div className="relative flex flex-col gap-6">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Action plan</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {totalActionable > 0
+                        ? `Grounded in ${totalActionableLabel} active ${actionableNoun} pulled straight from Todoist.`
+                        : "We couldn't find any active tasks with due dates. Add a few in Todoist to activate the planner."}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,hsla(var(--primary),0.16),transparent_65%)]" />
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,hsla(var(--accent),0.14),transparent_70%)]" />
-            <div className="relative">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">Plan your focus</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Adjust the range to surface the trends that matter most.
-                  </p>
+                  <Badge
+                    variant="secondary"
+                    className="w-fit rounded-full border border-primary/30 bg-primary/10 text-xs uppercase tracking-[0.28em] text-primary"
+                  >
+                    Live Todoist sync
+                  </Badge>
                 </div>
-                <div className="max-w-xl lg:w-auto">
-                  <h2 id="filters-heading" className="sr-only">
-                    Date Range Filters
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {planColumnMeta.map((column) => {
+                    const bucket = actionPlan[column.key];
+                    return (
+                      <div
+                        key={column.key}
+                        className="relative overflow-hidden rounded-3xl border border-white/10 bg-background/85 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.6)]"
+                      >
+                        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${column.gradient}`} />
+                        <div className="relative space-y-4">
+                          <div>
+                            <h3 className="text-base font-semibold text-foreground">{column.title}</h3>
+                            <p className="text-xs text-muted-foreground">{column.description}</p>
+                          </div>
+                          {bucket.length ? (
+                            <ul className="space-y-3">
+                              {bucket.slice(0, ACTION_PLAN_LIMIT).map((item) => (
+                                <li
+                                  key={item.id}
+                                  className="group rounded-2xl border border-white/10 bg-background/80 p-4 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.55)]"
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <p className="text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+                                        {item.content}
+                                      </p>
+                                      <p className="mt-1 text-xs text-muted-foreground">{item.projectName}</p>
+                                    </div>
+                                    <Badge
+                                      variant="outline"
+                                      className={`rounded-full border px-2 py-1 text-[11px] ${item.priorityTone}`}
+                                    >
+                                      {item.priorityLabel}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground/80">
+                                    <span>{item.dueLabel}</span>
+                                    {item.url ? (
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary transition-colors hover:text-primary/80"
+                                      >
+                                        Open
+                                        <ArrowUpRight className="h-3 w-3" />
+                                      </a>
+                                    ) : null}
+                                  </div>
+                                </li>
+                              ))}
+                              {bucket.length > ACTION_PLAN_LIMIT && (
+                                <p className="text-xs text-muted-foreground/70">
+                                  +{bucket.length - ACTION_PLAN_LIMIT} more queued in Todoist
+                                </p>
+                              )}
+                            </ul>
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-white/15 bg-background/70 p-4 text-sm text-muted-foreground">
+                              {column.emptyState}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex h-full flex-col gap-6">
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/82 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(145deg,hsla(var(--primary),0.16),transparent_65%)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,hsla(var(--accent),0.14),transparent_70%)]" />
+                <div className="relative space-y-6">
+                  <div className="flex flex-col gap-3">
+                    <h2 className="text-base font-semibold text-foreground">Plan your focus</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Adjust the range to surface the trends that matter most.
+                    </p>
+                  </div>
+                  <div>
+                    <h2 id="filters-heading" className="sr-only">
+                      Date Range Filters
+                    </h2>
+                    <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+                  </div>
+                </div>
+              </div>
+              <div className="relative flex-1 overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/82 p-6 sm:p-8 shadow-[0_32px_70px_-36px_rgba(15,23,42,0.55)]">
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(150deg,hsla(var(--accent),0.16),transparent_60%)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsla(var(--primary),0.12),transparent_65%)]" />
+                <div className="relative h-full">
+                  <h2 id="recap-heading" className="text-base font-semibold text-foreground">
+                    Recap snapshot
                   </h2>
-                  <Filters dateRange={dateRange} onDateRangeChange={setDateRange} />
+                  <div className="mt-5">
+                    <RecapCards stats={recapStats} />
+                  </div>
                 </div>
-              </div>
-              <div className="mt-8">
-                <h2 id="recap-heading" className="sr-only">
-                  Summary Statistics
-                </h2>
-                <RecapCards stats={recapStats} />
               </div>
             </div>
           </section>
 
-          <section className="space-y-8">
-            <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsla(var(--primary),0.18),transparent_65%)]" />
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsla(var(--background),0.95)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
-              <div className="relative">
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold text-foreground">Completion heatmap</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Spot streaks and quieter days at a glance.
-                  </p>
-                </div>
-                <div className="-mx-4 sm:mx-0">
-                  <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+          <section className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr),minmax(0,1fr)] xl:items-start">
+            <div className="flex flex-col gap-8">
+              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsla(var(--primary),0.18),transparent_65%)]" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsla(var(--background),0.95)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
+                <div className="relative">
+                  <div className="mb-6">
+                    <h2 className="text-lg font-semibold text-foreground">Completion heatmap</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Spot streaks and quieter days at a glance.
+                    </p>
+                  </div>
+                  <div className="-mx-4 sm:mx-0">
+                    <CompletionHeatmap data={dayStats} onDayClick={handleDayClick} />
+                  </div>
                 </div>
               </div>
+              {hourStats.length > 0 && (
+                <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,hsla(var(--primary),0.15),transparent_70%)]" />
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(200deg,hsla(var(--background),0.96)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
+                  <div className="relative">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold text-foreground">Time-of-day rhythm</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Understand when your completions peak.
+                      </p>
+                    </div>
+                    <TimeOfDayRhythm data={hourStats} />
+                  </div>
+                </div>
+              )}
             </div>
-
-            <div className="grid gap-8 lg:grid-cols-2">
+            <div className="flex flex-col gap-8">
               {dayStats.length > 0 && projectStats.length > 0 && (
                 <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_28px_70px_-40px_rgba(15,23,42,0.55)]">
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsla(var(--accent),0.18),transparent_65%)]" />
@@ -1056,22 +1079,6 @@ export default function Index() {
                 </div>
               )}
             </div>
-
-            {hourStats.length > 0 && (
-              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-background/80 p-6 sm:p-8 shadow-[0_32px_80px_-38px_rgba(15,23,42,0.55)]">
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,hsla(var(--primary),0.15),transparent_70%)]" />
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(200deg,hsla(var(--background),0.96)_0%,hsla(var(--background),0.85)_100%)] opacity-80" />
-                <div className="relative">
-                  <div className="mb-6">
-                    <h2 className="text-lg font-semibold text-foreground">Time-of-day rhythm</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Understand when your completions peak.
-                    </p>
-                  </div>
-                  <TimeOfDayRhythm data={hourStats} />
-                </div>
-              </div>
-            )}
           </section>
         </div>
       );
