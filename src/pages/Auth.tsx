@@ -164,6 +164,7 @@ export default function Auth() {
       scope: requestedScope,
       state,
     });
+    
     console.log("Redirecting to Todoist with URL:", authUrl);
     window.location.href = authUrl;
   };
