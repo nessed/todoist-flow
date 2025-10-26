@@ -40,7 +40,8 @@ import {
   calculateRecapStats,
   fetchUserProfile,
   fetchUpcomingTasks,
-  revokeTodoistToken,
+  logoutSession,
+  fetchSession,
 } from "@/lib/todoist";
 import {
   subDays,
@@ -99,30 +100,45 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const [useSampleData, setUseSampleData] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0); // trigger refetch without full reload
-  const [hasConnectedAccount, setHasConnectedAccount] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return Boolean(window.localStorage.getItem("todoist_token"));
-  });
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [session, setSession] = useState<{
+    authenticated: boolean;
+    profile: TodoistUserProfile | null;
+  } | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("todoist_token");
-    setHasConnectedAccount(Boolean(token));
+    let active = true;
+    setSessionLoading(true);
 
-    if (!token && !useSampleData) {
-      console.log("[Index.tsx] No token found, navigating to /auth");
-      setUserProfile(null);
-      setTasks([]);
-      setProjects([]);
-      setUpcomingTasks([]);
-      setIsLoading(false);
-      navigate("/auth");
-      return;
-    }
+    fetchSession()
+      .then((data) => {
+        if (!active) return;
+        setSession(data);
+      })
+      .catch((error) => {
+        console.error("[Index.tsx] Failed to load session", error);
+        if (!active) return;
+        setSession({ authenticated: false, profile: null });
+      })
+      .finally(() => {
+        if (!active) return;
+        setSessionLoading(false);
+      });
 
-    const fetchData = async () => {
+    return () => {
+      active = false;
+    };
+  }, [refreshTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      if (sessionLoading) {
+        return;
+      }
+
       console.log("[Index.tsx] Starting fetchData...");
       setIsLoading(true);
       setError(null);
@@ -130,185 +146,187 @@ export default function Index() {
       if (useSampleData) {
         console.log("[Index.tsx] Using sample data.");
         try {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            setUserProfile({
-              id: "sample",
-              full_name: "DoneGlow Explorer",
-              email: "explorer@doneglow.app",
-              avatar_url: null,
-              image_id: null,
-              timezone:
-                typeof Intl !== "undefined"
-                  ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                  : null,
-            });
-            setTasks(generateMockTasks(90));
-            setProjects(generateMockProjects());
-            const today = new Date();
-            setUpcomingTasks([
-              {
-                id: "sample-upcoming-1",
-                content: "Nudge quarterly strategy memo",
-                project_id: "proj1",
-                labels: ["strategy"],
-                priority: 4,
-                due: {
-                  date: format(addDays(today, -1), "yyyy-MM-dd"),
-                  datetime: null,
-                  timezone: null,
-                },
-                url: "#",
-                section_id: null,
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (cancelled) return;
+          setUserProfile({
+            id: "sample",
+            full_name: "DoneGlow Explorer",
+            email: "explorer@doneglow.app",
+            avatar_url: null,
+            image_id: null,
+            timezone:
+              typeof Intl !== "undefined"
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : null,
+          });
+          setTasks(generateMockTasks(90));
+          setProjects(generateMockProjects());
+          const today = new Date();
+          setUpcomingTasks([
+            {
+              id: "sample-upcoming-1",
+              content: "Nudge quarterly strategy memo",
+              project_id: "proj1",
+              labels: ["strategy"],
+              priority: 4,
+              due: {
+                date: format(addDays(today, -1), "yyyy-MM-dd"),
+                datetime: null,
+                timezone: null,
               },
-              {
-                id: "sample-upcoming-2",
-                content: "Ship DoneGlow release notes",
-                project_id: "proj1",
-                labels: ["ship"],
-                priority: 3,
-                due: {
-                  date: format(today, "yyyy-MM-dd"),
-                  datetime: null,
-                  timezone: null,
-                },
-                url: "#",
-                section_id: null,
+              url: "#",
+              section_id: null,
+            },
+            {
+              id: "sample-upcoming-2",
+              content: "Ship DoneGlow release notes",
+              project_id: "proj1",
+              labels: ["ship"],
+              priority: 3,
+              due: {
+                date: format(today, "yyyy-MM-dd"),
+                datetime: null,
+                timezone: null,
               },
-              {
-                id: "sample-upcoming-3",
-                content: "Plan weekend hike",
-                project_id: "proj4",
-                labels: ["health"],
-                priority: 2,
-                due: {
-                  date: format(addDays(today, 2), "yyyy-MM-dd"),
-                  datetime: null,
-                  timezone: null,
-                },
-                url: "#",
-                section_id: null,
+              url: "#",
+              section_id: null,
+            },
+            {
+              id: "sample-upcoming-3",
+              content: "Plan weekend hike",
+              project_id: "proj4",
+              labels: ["health"],
+              priority: 2,
+              due: {
+                date: format(addDays(today, 2), "yyyy-MM-dd"),
+                datetime: null,
+                timezone: null,
               },
-              {
-                id: "sample-upcoming-4",
-                content: "Clear reading backlog",
-                project_id: "proj3",
-                labels: ["learning"],
-                priority: 1,
-                due: null,
-                url: "#",
-                section_id: null,
-              },
-            ]);
+              url: "#",
+              section_id: null,
+            },
+            {
+              id: "sample-upcoming-4",
+              content: "Clear reading backlog",
+              project_id: "proj3",
+              labels: ["learning"],
+              priority: 1,
+              due: null,
+              url: "#",
+              section_id: null,
+            },
+          ]);
         } catch (sampleErr) {
-             console.error("[Index.tsx] Error generating sample data:", sampleErr);
-             setError("Failed to load sample data.");
-             setUserProfile(null);
-             setUpcomingTasks([]);
+          console.error("[Index.tsx] Error generating sample data:", sampleErr);
+          if (!cancelled) {
+            setError("Failed to load sample data.");
+            setUserProfile(null);
+            setUpcomingTasks([]);
+          }
         } finally {
-             setIsLoading(false);
+          if (!cancelled) {
+            setIsLoading(false);
+          }
         }
         return;
       }
 
-      // Fetch real data only if token exists
-      if (token) {
-          let fetchedTasks: TodoistTask[] = [];
-          let fetchedProjects: TodoistProject[] = [];
-          let fetchError: Error | null = null;
-          let fetchedUser: TodoistUserProfile | null = null;
-
-          try {
-            console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
-            // Pass `since` to cut payloads when we have a date range
-            const since = dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined;
-            const upcomingPromise = fetchUpcomingTasks(token).catch((err) => {
-              console.warn("[Index.tsx] Unable to fetch upcoming tasks.", err);
-              return [] as TodoistActiveTask[];
-            });
-            const [tasksData, projectsData, upcomingData] = await Promise.all([
-              fetchCompletedTasks(token, since),
-              fetchProjects(token),
-              upcomingPromise,
-            ]);
-            fetchedTasks = tasksData;
-            fetchedProjects = projectsData;
-            setUpcomingTasks(upcomingData);
-            try {
-              fetchedUser = await fetchUserProfile(token);
-            } catch (profileErr) {
-              console.warn("[Index.tsx] Unable to fetch Todoist user profile.", profileErr);
-            }
-            console.log(`[Index.tsx] Successfully fetched ${fetchedTasks.length} tasks and ${fetchedProjects.length} projects.`);
-            setTasks(fetchedTasks);
-            setProjects(fetchedProjects);
-            setUserProfile(fetchedUser);
-            if (!upcomingData || upcomingData.length === 0) {
-              console.info("[Index.tsx] No upcoming tasks returned or feature unavailable.");
-            }
-          } catch (err) {
-            console.error("[Index.tsx] Error during Promise.all fetchData:", err);
-            fetchError = err instanceof Error ? err : new Error('Unknown error during fetch');
-            setError(`Failed to fetch data: ${fetchError.message}. Please check your connection or API token.`);
-            setTasks([]);
-            setProjects([]);
-            setUserProfile(null);
-            setUpcomingTasks([]);
-             // If fetch fails due to auth, clear token and redirect
-             if ((err as any)?.message?.includes('Authentication failed')) {
-                localStorage.removeItem("todoist_token");
-                navigate("/auth");
-             }
-          } finally {
-            console.log("[Index.tsx] fetchData finished, setting isLoading to false.");
-            setIsLoading(false);
-          }
-      } else {
-          // Should not happen due to initial check, but good failsafe
+      if (!session?.authenticated) {
+        console.log("[Index.tsx] No active session, redirecting to /auth");
+        if (!cancelled) {
+          setUserProfile(null);
+          setTasks([]);
+          setProjects([]);
+          setUpcomingTasks([]);
           setIsLoading(false);
-          setError("No API token found.");
           navigate("/auth");
+        }
+        return;
+      }
+
+      let fetchedTasks: TodoistTask[] = [];
+      let fetchedProjects: TodoistProject[] = [];
+      let fetchError: Error | null = null;
+      let fetchedUser: TodoistUserProfile | null = session.profile ?? null;
+
+      try {
+        console.log("[Index.tsx] Attempting to fetch projects and tasks in parallel...");
+        const since = dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined;
+        const upcomingPromise = fetchUpcomingTasks().catch((err) => {
+          console.warn("[Index.tsx] Unable to fetch upcoming tasks.", err);
+          return [] as TodoistActiveTask[];
+        });
+        const [tasksData, projectsData, upcomingData] = await Promise.all([
+          fetchCompletedTasks(since),
+          fetchProjects(),
+          upcomingPromise,
+        ]);
+        if (cancelled) return;
+        fetchedTasks = tasksData;
+        fetchedProjects = projectsData;
+        setUpcomingTasks(upcomingData);
+        if (!fetchedUser) {
+          try {
+            fetchedUser = await fetchUserProfile();
+          } catch (profileErr) {
+            console.warn("[Index.tsx] Unable to fetch Todoist user profile.", profileErr);
+          }
+        }
+        console.log(
+          `[Index.tsx] Successfully fetched ${fetchedTasks.length} tasks and ${fetchedProjects.length} projects.`
+        );
+        setTasks(fetchedTasks);
+        setProjects(fetchedProjects);
+        setUserProfile(fetchedUser);
+        if (!upcomingData || upcomingData.length === 0) {
+          console.info("[Index.tsx] No upcoming tasks returned or feature unavailable.");
+        }
+      } catch (err) {
+        console.error("[Index.tsx] Error during Promise.all fetchData:", err);
+        fetchError = err instanceof Error ? err : new Error("Unknown error during fetch");
+        if (!cancelled) {
+          setError(`Failed to fetch data: ${fetchError.message}. Please check your connection or session.`);
+          setTasks([]);
+          setProjects([]);
+          setUserProfile(null);
+          setUpcomingTasks([]);
+          if (fetchError.message.includes("Authentication failed")) {
+            setSession({ authenticated: false, profile: null });
+            navigate("/auth");
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          console.log("[Index.tsx] fetchData finished, setting isLoading to false.");
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchData();
+    run();
 
     return () => {
+      cancelled = true;
       console.log("[Index.tsx] Cleanup useEffect");
     };
-  }, [navigate, useSampleData, refreshTick]); // trigger re-fetch via refreshTick
+  }, [session, sessionLoading, useSampleData, navigate, refreshTick, dateRange]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
 
     try {
-      const token = localStorage.getItem("todoist_token");
-
-      if (token) {
-        const clientId = import.meta.env.VITE_TODOIST_CLIENT_ID as string | undefined;
-        const clientSecret = import.meta.env.VITE_TODOIST_CLIENT_SECRET as string | undefined;
-
-        const revoked = await revokeTodoistToken({
-          token,
-          clientId,
-          clientSecret,
-        });
-
-        if (!revoked) {
-          console.warn("[Index.tsx] Todoist token revocation returned non-success. Clearing locally anyway.");
-        }
-      }
-
-      localStorage.removeItem("todoist_token");
-      setTasks([]);
-      setProjects([]);
-      setUserProfile(null);
-      setUpcomingTasks([]);
-      setHasConnectedAccount(false);
-      setUseSampleData(false);
-      navigate("/auth");
+      await logoutSession();
     } finally {
       setIsLoggingOut(false);
     }
+
+    setTasks([]);
+    setProjects([]);
+    setUserProfile(null);
+    setUpcomingTasks([]);
+    setSession({ authenticated: false, profile: null });
+    setUseSampleData(false);
+    navigate("/auth");
   };
 
   const handleDayClick = (day: DayStats) => {
@@ -1202,7 +1220,7 @@ export default function Index() {
               </div>
             </div>
             <ThemeToggle />
-            {!useSampleData && hasConnectedAccount && (
+            {!useSampleData && session?.authenticated && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1215,7 +1233,7 @@ export default function Index() {
                 <span>{isLoggingOut ? "Signing out..." : "Sign out"}</span>
               </Button>
             )}
-            {!useSampleData && hasConnectedAccount && (
+            {!useSampleData && session?.authenticated && (
               <Button
                 variant="ghost"
                 size="icon"
